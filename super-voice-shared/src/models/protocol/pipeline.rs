@@ -85,6 +85,28 @@ pub struct StageReport {
     pub enabled: bool,
 }
 
+/// Where a stage's selected model stands: in memory, out of memory until its
+/// next use loads it, or neither.
+///
+/// One answer for both features, since every stage loads and unloads the same
+/// way. `idle` is the daemon's to say rather than a client's to work out: it
+/// is the daemon that decides whether the next request loads the model.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum ModelState {
+    /// Loaded and ready to run.
+    Loaded,
+    /// Out of memory, and the next request that needs it loads it: idle
+    /// unload is on, and the stage is on with a model selected. What an idle
+    /// unload leaves.
+    Idle,
+    /// Out of memory, and nothing loads it until a Load: no model is
+    /// selected, the stage is switched off, or idle unload is off.
+    #[default]
+    NotLoaded,
+}
+
 /// The model slot of one stage: what is selected, whether it is up, the device
 /// it runs on, and the load still in flight.
 ///
@@ -101,6 +123,9 @@ pub struct StageModelReport {
     pub model: Option<String>,
     /// Whether that model is loaded and ready to run.
     pub loaded: bool,
+    /// Where that model stands: `loaded`, `idle` (out of memory until its next
+    /// use loads it), or `not_loaded`. `loaded` is true exactly when this is.
+    pub state: ModelState,
     /// The accelerator the selection runs on; `null` when nothing is selected.
     ///
     /// What it *could* run on is `GET /stt/pipeline/{stage}/model/{model}/device/list`,
@@ -177,8 +202,8 @@ pub struct SwitchDownload {
 #[cfg(test)]
 mod tests {
     use super::{
-        POST_PROCESSOR_STAGE, StageModelDevice, StageModelReport, StageReport, StageRole,
-        StageSwitch, SwitchDownload, SwitchTarget, TRANSCRIPTION_STAGE,
+        ModelState, POST_PROCESSOR_STAGE, StageModelDevice, StageModelReport, StageReport,
+        StageRole, StageSwitch, SwitchDownload, SwitchTarget, TRANSCRIPTION_STAGE,
     };
 
     fn empty_stage(stage: u32, role: StageRole) -> StageReport {
@@ -196,6 +221,7 @@ mod tests {
             stage,
             model: None,
             loaded: false,
+            state: ModelState::NotLoaded,
             device: None,
             switch: None,
         }
@@ -364,6 +390,7 @@ mod tests {
             stage: POST_PROCESSOR_STAGE,
             model: Some("s1-mini-q4_k_m".to_string()),
             loaded: false,
+            state: ModelState::NotLoaded,
             device: Some(StageModelDevice {
                 preference: "cpu".to_string(),
                 resolved_accel: Some("cpu".to_string()),
@@ -443,5 +470,22 @@ mod tests {
         };
         let json = serde_json::to_value(download).expect("serializes");
         assert!(json["eta_seconds"].is_null());
+    }
+
+    /// The state goes on the wire in snake case, the way the protocol docs
+    /// spell it.
+    #[test]
+    fn a_model_state_is_spelled_as_the_docs_spell_it() {
+        for (state, wire) in [
+            (ModelState::Loaded, "\"loaded\""),
+            (ModelState::Idle, "\"idle\""),
+            (ModelState::NotLoaded, "\"not_loaded\""),
+        ] {
+            assert_eq!(serde_json::to_string(&state).expect("serialize"), wire);
+            assert_eq!(
+                serde_json::from_str::<ModelState>(wire).expect("deserialize"),
+                state
+            );
+        }
     }
 }

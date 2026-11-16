@@ -37,6 +37,7 @@ Content-Type: application/json
     "stage":  1,
     "model":  "whisper-large-v3",
     "loaded": true,
+    "state":  "loaded",
     "device": {
       "preference":     "gpu",
       "resolved_accel": "cuda"
@@ -52,10 +53,21 @@ model again — onto another device, say — without the user picking it a secon
 time. `loaded` is what says whether it is up. Both stages answer this way; stage
 1 collapsed the two into one bit until the stages were made to behave alike.
 
+`state` says where that model stands, so a client need not work it out:
+
+| `state`      | The model is                                                                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loaded`     | in memory and ready. `loaded` is true exactly then.                                                                                                  |
+| `idle`       | out of memory, and the next request that needs it loads it: [idle unload](../settings/idle_unload.md) is on, and the stage is on with a model selected. What an idle unload leaves. |
+| `not_loaded` | out of memory, and nothing loads it until a [load](#post-sttpipelinestagemodel): no model is selected, the stage is switched off, or idle unload is off. |
+
+A client shows an `idle` stage as ready: a recording waits for its load, and
+nothing else differs.
+
 An empty slot reports `null` rather than omitting the keys:
 
 ```json
-{ "stage": 2, "model": null, "loaded": false, "device": null, "switch": null }
+{ "stage": 2, "model": null, "loaded": false, "state": "not_loaded", "device": null, "switch": null }
 ```
 
 **Errors:** `404 unknown_stage`, plus the auth errors below.

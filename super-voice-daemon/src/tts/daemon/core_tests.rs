@@ -2137,6 +2137,48 @@ async fn idle_unload_frees_the_model_and_keeps_it_selected() {
     );
 }
 
+/// The model slot says where the model stands: `idle` while it is out of
+/// memory and the next speak loads it, `loaded` while it is up, and
+/// `not_loaded` when nothing would load it: no model selected, or idle unload
+/// off.
+#[tokio::test]
+async fn the_model_slot_says_whether_the_model_is_idle() {
+    use super_voice_shared::tts::models::protocol::ModelState;
+    let daemon = test_daemon().await;
+    let source = "github.com/super-tts/kokoro";
+    *daemon.backends.write().await = vec![fixture_backend_local(
+        "kokoro",
+        source,
+        "Kokoro",
+        "kokoro-tiny",
+    )];
+    daemon.config.write().await.idle_unload.after_secs = 300;
+    assert_eq!(
+        daemon.stage_model().await.state,
+        ModelState::NotLoaded,
+        "nothing selected"
+    );
+
+    daemon
+        .config
+        .write()
+        .await
+        .update_synthesis_model("kokoro-tiny".into(), source.into());
+    assert_eq!(daemon.stage_model().await.state, ModelState::Idle);
+
+    daemon.config.write().await.idle_unload.after_secs = 0;
+    assert_eq!(
+        daemon.stage_model().await.state,
+        ModelState::NotLoaded,
+        "idle unload off"
+    );
+
+    seed_loaded_model(&daemon, "kokoro-tiny", source).await;
+    let slot = daemon.stage_model().await;
+    assert!(slot.loaded);
+    assert_eq!(slot.state, ModelState::Loaded);
+}
+
 /// Text that cannot be spoken is refused before a model is loaded for it, so
 /// with idle unload on an empty request does not load a model only to fail.
 #[tokio::test]

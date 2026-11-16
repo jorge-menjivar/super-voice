@@ -53,6 +53,7 @@ Authorization: Bearer …64hex…
     "stage":  1,
     "model":  "kokoro-82m",
     "loaded": true,
+    "state":  "loaded",
     "device": {
       "preference":     "gpu",
       "resolved_accel": "cuda"
@@ -65,13 +66,23 @@ Authorization: Bearer …64hex…
 `model` is the **selection**, not the running instance: it survives an
 [unload](#delete-ttspipelinestagemodel), so a client can offer to load the same
 model again — onto another device, say — without the user picking it a second
-time. `loaded` is what says whether it is up, and what a Speak button should be
-gated on.
+time. `loaded` is what says whether it is up.
+
+`state` says where that model stands, as for speech to text's stages:
+
+| `state`      | The model is                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `loaded`     | in memory and ready. `loaded` is true exactly then.                                                                                              |
+| `idle`       | out of memory, and the next [speak](../speak.md) loads it: [idle unload](../../settings/idle_unload.md) is on and a model is selected. What an idle unload leaves. |
+| `not_loaded` | out of memory, and nothing loads it until a [load](#post-ttspipelinestagemodel): no model is selected, or idle unload is off.                      |
+
+A Speak button is live when `state` is `loaded` or `idle`: an `idle` model
+loads for the speak, which waits for it.
 
 An empty slot reports `null` rather than omitting the keys:
 
 ```json
-{ "stage": 1, "model": null, "loaded": false, "device": null, "switch": null }
+{ "stage": 1, "model": null, "loaded": false, "state": "not_loaded", "device": null, "switch": null }
 ```
 
 While a load is in flight, `switch` is populated and `model`/`loaded` still

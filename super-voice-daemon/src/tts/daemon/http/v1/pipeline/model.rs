@@ -39,9 +39,11 @@ section from a single request.
 
 `model` is the *selection*, not the running instance: it survives an unload, so a card \
 can offer to load the same model again — onto another device, say — without the user \
-picking it a second time. `loaded` is what says whether it is up, and what `POST \
-/speak` requires. `switch` can be present while `model` is still `null`; that is a \
-stage's very first load.
+picking it a second time. `loaded` is what says whether it is up. `state` says where \
+it stands: `loaded`, `idle` (out of memory, and the next `POST /speak` loads it: idle \
+unload is on and a model is selected), or `not_loaded` (nothing loads it until a \
+load). `POST /speak` needs `loaded` or `idle`. `switch` can be present while `model` \
+is still `null`; that is a stage's very first load.
 
 `device` carries the stored preference and what it resolved to, which is all a picker \
 needs to render its current value. What the model *could* run on is \
