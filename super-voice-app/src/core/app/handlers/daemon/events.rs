@@ -113,6 +113,7 @@ impl AppModel {
             }
             DaemonStatusEvent::Ready {
                 model_loaded,
+                model_state,
                 actual_device,
                 ..
             } => {
@@ -121,11 +122,14 @@ impl AppModel {
                     // An unload this app may not have asked for, such as the
                     // daemon's own of an idle model. The event says nothing is
                     // loaded, so clear the model here and let the event outdate
-                    // any snapshot still in flight. Re-reading instead would
-                    // also reset the card, wiping the Loading of a load the
-                    // user started while the unload finished.
+                    // any snapshot still in flight. Re-reading the whole stage
+                    // instead would also reset the card, wiping the Loading of
+                    // a load the user started while the unload finished.
+                    let was = (!self.current_model.is_empty())
+                        .then(|| (self.current_model.clone(), self.current_source.clone()));
                     self.current_model_epoch = self.current_model_epoch.wrapping_add(1);
                     self.clear_loaded_model();
+                    return self.take_transcription_idle(model_state, was);
                 }
                 None
             }
@@ -277,6 +281,7 @@ impl AppModel {
         self.current_model_epoch = self.current_model_epoch.wrapping_add(1);
         self.current_model.clone_from(&model);
         self.current_source.clone_from(&source);
+        self.transcription_idle = None;
         self.model_operations.set_ready(Stage::Transcription);
         info!("Stage 1 model state updated to Ready after model_switched event");
         // Mirror CurrentModelLoaded/ModelChanged: fetch the per-model language
@@ -316,7 +321,15 @@ impl AppModel {
             "post_processor" => Some(crate::core::app::handlers::stage::load_block(
                 BlockStage::PostProcessing,
             )),
-            "idle_unload" => Some(crate::core::app::handlers::tasks::load_idle_unload()),
+            // Whether each stage's model is idle follows the setting: the
+            // daemon reports a model out of memory as idle only while the next
+            // use would load it. So every stage is read again with it.
+            "idle_unload" => Some(Task::batch([
+                crate::core::app::handlers::tasks::load_idle_unload(),
+                crate::core::app::handlers::stage::load_block(BlockStage::PostProcessing),
+                crate::core::app::handlers::stage::load_block(BlockStage::Synthesis),
+                self.read_transcription_idle(),
+            ])),
             // A context was added, edited, deleted, or put in force.
             // One topic covers the whole family because the answer to
             // any of them is the same: re-read the list. The open

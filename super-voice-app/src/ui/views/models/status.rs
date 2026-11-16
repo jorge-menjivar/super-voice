@@ -228,9 +228,12 @@ pub(super) enum ModelStatus {
     Blocked,
     /// Backend selected and fully configured, but no model is up yet: none
     /// loaded, or one still downloading or loading. Yellow.
-    Idle,
+    NotLoaded,
     /// A model is loaded and ready. Green.
     Ready,
+    /// The model is out of memory until its next use, which loads it: ready
+    /// as far as the user is concerned. Green, as [`Self::Ready`] is.
+    Idle,
     /// The stage is switched on but its model is not running: it failed to
     /// come up, or the last load failed. Red.
     Failed,
@@ -242,8 +245,9 @@ impl ModelStatus {
         match self {
             Self::None => crate::fl!("no-backend-selected"),
             Self::Blocked => crate::fl!("backend-setup-incomplete"),
-            Self::Idle => crate::fl!("no-model-loaded"),
+            Self::NotLoaded => crate::fl!("no-model-loaded"),
             Self::Ready => crate::fl!("model-loaded-and-ready"),
+            Self::Idle => crate::fl!("model-idle"),
             Self::Failed => crate::fl!("the-selected-model-isn-t-loaded"),
         }
     }
@@ -287,31 +291,44 @@ pub(super) fn classify_model_status(
     if model_loaded {
         ModelStatus::Ready
     } else {
-        ModelStatus::Idle
+        ModelStatus::NotLoaded
     }
 }
 
 /// The [`ModelStatus`] of any stage.
 ///
-/// A download or load in flight reads as [`Idle`](ModelStatus::Idle) whatever
-/// the stage reports, since nothing is up yet but nothing is wrong either; a
-/// failed one reads as [`Failed`](ModelStatus::Failed) until the next attempt.
+/// A download or load in flight reads as [`NotLoaded`](ModelStatus::NotLoaded)
+/// whatever the stage reports, since nothing is up yet but nothing is wrong
+/// either; a failed one reads as [`Failed`](ModelStatus::Failed) until the
+/// next attempt.
 pub(super) fn stage_status(app: &AppModel, stage: crate::state::Stage) -> ModelStatus {
     use crate::state::model_operations::ModelOperationState;
     match app.model_operations.get(stage) {
         ModelOperationState::Provisioning { .. } | ModelOperationState::Loading { .. } => {
-            return ModelStatus::Idle;
+            return ModelStatus::NotLoaded;
         }
         ModelOperationState::Error { .. } => return ModelStatus::Failed,
         ModelOperationState::Ready => {}
     }
-    match stage.block() {
+    let status = match stage.block() {
         None => model_status(app),
         Some(block) => classify_block_status(
             app.block(block),
             &app.backends,
             &app.backend_secret_configured,
         ),
+    };
+    idle_when(status, app.idle_model(stage).is_some())
+}
+
+/// `status` for a stage whose model is out of memory until its next use, when
+/// `idle`. Only the states that say nothing is up become
+/// [`Idle`](ModelStatus::Idle): a backend that is not set up stays
+/// [`Blocked`](ModelStatus::Blocked), since the next use would fail.
+fn idle_when(status: ModelStatus, idle: bool) -> ModelStatus {
+    match status {
+        ModelStatus::NotLoaded | ModelStatus::Failed if idle => ModelStatus::Idle,
+        other => other,
     }
 }
 
@@ -337,7 +354,7 @@ pub(super) fn classify_block_status(
     match (block.enabled, block.loaded) {
         (true, true) => ModelStatus::Ready,
         (true, false) => ModelStatus::Failed,
-        (false, _) => ModelStatus::Idle,
+        (false, _) => ModelStatus::NotLoaded,
     }
 }
 
@@ -345,8 +362,8 @@ pub(super) fn classify_block_status(
 mod model_status_tests {
     //! Pin the status-dot rule. The states are: no backend selected → gray;
     //! backend selected but requirements unmet → red; ready but no model
-    //! loaded → yellow; model loaded → green; switched on but not running →
-    //! red.
+    //! loaded → yellow; model loaded → green; out of memory until its next
+    //! use → green; switched on but not running → red.
     use super::*;
     use crate::daemon::backends::{BackendInfo, BackendModel, BackendSecret};
     use crate::daemon::client::v1::pipeline::StageState;
@@ -423,7 +440,7 @@ mod model_status_tests {
     /// All requirements satisfied but no model loaded for the active backend
     /// → yellow.
     #[test]
-    fn requirements_met_no_model_is_idle() {
+    fn requirements_met_no_model_is_not_loaded() {
         let backends = vec![backend_with_required_secret()];
         let mut map = HashMap::new();
         map.insert(
@@ -432,7 +449,7 @@ mod model_status_tests {
         );
         assert_eq!(
             classify_model_status(Some("github.com/super-stt/openai"), &backends, &map, "", "",),
-            ModelStatus::Idle,
+            ModelStatus::NotLoaded,
         );
     }
 
@@ -440,7 +457,7 @@ mod model_status_tests {
     /// not "this backend ready" — the dot stays yellow until the user picks
     /// a model from the active backend.
     #[test]
-    fn loaded_model_from_other_source_is_idle() {
+    fn loaded_model_from_other_source_is_not_loaded() {
         let backends = vec![backend_with_required_secret()];
         let mut map = HashMap::new();
         map.insert(
@@ -455,7 +472,7 @@ mod model_status_tests {
                 "voxtral-mini-latest",
                 "github.com/super-stt/mistral",
             ),
-            ModelStatus::Idle,
+            ModelStatus::NotLoaded,
         );
     }
 
@@ -487,6 +504,11 @@ mod model_status_tests {
             enabled,
             model: source.map(|_| "whisper-1".to_string()),
             loaded,
+            state: if loaded {
+                crate::daemon::client::ModelState::Loaded
+            } else {
+                crate::daemon::client::ModelState::NotLoaded
+            },
             device: None,
         }
     }
@@ -529,10 +551,32 @@ mod model_status_tests {
 
     /// Unloaded on purpose is waiting, not wrong.
     #[test]
-    fn a_switched_off_block_is_idle() {
+    fn a_switched_off_block_is_not_loaded() {
         assert_eq!(
             classify_block_status(&block(Some(OPENAI), false, false), &[], &HashMap::new()),
-            ModelStatus::Idle,
+            ModelStatus::NotLoaded,
         );
+    }
+
+    /// A model out of memory until its next use is ready, whether the stage
+    /// would read as switched on and not running, or as nothing loaded.
+    #[test]
+    fn an_idle_stage_is_ready_and_idle() {
+        assert_eq!(idle_when(ModelStatus::Failed, true), ModelStatus::Idle);
+        assert_eq!(idle_when(ModelStatus::NotLoaded, true), ModelStatus::Idle);
+        assert_eq!(idle_when(ModelStatus::Failed, false), ModelStatus::Failed);
+        assert_eq!(
+            idle_when(ModelStatus::NotLoaded, false),
+            ModelStatus::NotLoaded
+        );
+    }
+
+    /// The next use of a backend that is not set up would fail, so it is not
+    /// idle, and neither is a stage already running or with no backend.
+    #[test]
+    fn only_a_stage_with_nothing_up_is_idle() {
+        for status in [ModelStatus::Blocked, ModelStatus::Ready, ModelStatus::None] {
+            assert_eq!(idle_when(status, true), status);
+        }
     }
 }

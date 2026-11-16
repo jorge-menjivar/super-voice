@@ -138,19 +138,30 @@ fn operation(op: &ModelOperationState) -> Option<(String, Option<f32>)> {
 }
 
 fn summary(app: &AppModel, stage: Stage) -> StepSummary {
-    if let Some(block) = stage.block() {
-        return block_summary(block, app.block(block));
+    let mut summary = if let Some(block) = stage.block() {
+        block_summary(block, app.block(block))
+    } else {
+        let active = app.models_page.active_backend.as_deref();
+        let name = active
+            .and_then(|source| app.backends.iter().find(|b| b.source == source))
+            .map(|b| b.name.as_str());
+        transcription_summary(
+            name,
+            &app.current_model,
+            active == Some(app.current_source.as_str()),
+            &app.current_device,
+        )
+    };
+    if let Some(model) = app.idle_model(stage) {
+        summary.detail = idle(model);
     }
-    let active = app.models_page.active_backend.as_deref();
-    let name = active
-        .and_then(|source| app.backends.iter().find(|b| b.source == source))
-        .map(|b| b.name.as_str());
-    transcription_summary(
-        name,
-        &app.current_model,
-        active == Some(app.current_source.as_str()),
-        &app.current_device,
-    )
+    summary
+}
+
+/// `model · Idle`, for a model out of memory until its next use: it runs on
+/// nothing yet, and the next use loads it.
+fn idle(model: &str) -> String {
+    format!("{model} · {}", crate::fl!("idle"))
 }
 
 /// The content width the rows need to stay rows: both ends, three carets and
@@ -374,6 +385,11 @@ mod tests {
             enabled,
             model: model.map(ToString::to_string),
             loaded,
+            state: if loaded {
+                crate::daemon::client::ModelState::Loaded
+            } else {
+                crate::daemon::client::ModelState::NotLoaded
+            },
             device: None,
         }
     }
@@ -436,6 +452,11 @@ mod tests {
         );
         assert_eq!(summary.title, "Tidy");
         assert_eq!(summary.detail, "Not loaded");
+    }
+
+    #[test]
+    fn an_idle_model_says_so() {
+        assert_eq!(idle("whisper-base"), "whisper-base · Idle");
     }
 
     #[test]

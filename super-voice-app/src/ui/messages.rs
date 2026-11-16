@@ -165,9 +165,20 @@ pub enum ModelMessage {
     CurrentModelLoaded {
         model: String,
         source: String,
+        /// The model stage 1 keeps idle, when nothing is loaded: see
+        /// `AppModel::transcription_idle`.
+        idle: Option<(String, String)>,
         /// `current_model_epoch` captured when this snapshot was requested.
         /// The handler applies the snapshot only if the epoch is unchanged —
         /// otherwise a live `model_switched` superseded it and wins.
+        epoch: u64,
+    },
+    /// Stage 1 was re-read after its model left memory, for whether the
+    /// daemon reports it idle. Only that: the loaded model and the card's
+    /// operation are the events' to set. Applied under the same epoch as
+    /// [`Self::CurrentModelLoaded`].
+    IdleRead {
+        idle: Option<(String, String)>,
         epoch: u64,
     },
     ModelChanged {

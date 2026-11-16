@@ -34,7 +34,7 @@ pub use v1::pipeline::model::{
     unload_stage_model,
 };
 pub use v1::pipeline::stage::{clear_stage_backend, set_stage_backend};
-pub use v1::pipeline::{StageState, get_stage_view};
+pub use v1::pipeline::{ModelState, StageState, get_stage_view};
 
 pub use v1::settings::audio_theme::{
     get_current_audio_theme, load_audio_themes, set_and_test_audio_theme, set_audio_theme,

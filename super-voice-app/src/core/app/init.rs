@@ -132,6 +132,7 @@ impl AppModel {
             current_model: String::new(),
             current_source: String::new(),
             current_model_epoch: 0,
+            transcription_idle: None,
             model_operations: crate::state::model_operations::ModelOperations::opening(crate::fl!(
                 "loading-initial-model-state"
             )),

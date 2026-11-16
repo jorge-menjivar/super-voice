@@ -248,6 +248,32 @@ async fn an_unloaded_model_keeps_its_selection_and_reports_no_device() {
     assert_eq!(slot.running_device(), None);
 }
 
+/// Whether an unloaded model is idle is the daemon's to say, so the slot
+/// carries it as read. A daemon that predates `state` reads as not loaded.
+#[tokio::test]
+async fn the_daemon_says_when_a_model_is_idle() {
+    let daemon = FakeDaemon::start().await;
+    daemon
+        .reply(Reply::json(&json!({
+            "status": "success",
+            "model": { "model": "whisper-tiny", "loaded": false, "state": "idle" },
+        })))
+        .reply(Reply::json(&json!({
+            "status": "success",
+            "model": { "model": "whisper-tiny", "loaded": false },
+        })));
+
+    let idle = model::get_stage_model(Stage::Transcription)
+        .await
+        .expect("slot read");
+    let older = model::get_stage_model(Stage::Transcription)
+        .await
+        .expect("slot read");
+
+    assert_eq!(idle.state, model::ModelState::Idle);
+    assert_eq!(older.state, model::ModelState::NotLoaded);
+}
+
 #[tokio::test]
 async fn a_slot_read_that_the_daemon_did_not_call_a_success_is_an_error() {
     let daemon = FakeDaemon::start().await;

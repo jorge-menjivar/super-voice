@@ -106,6 +106,7 @@ fn selected_backend(app: &AppModel, stage: BlockStage) -> Option<&BackendInfo> {
 pub(crate) fn section(app: &AppModel, stage: BlockStage, width: f32) -> Element<'_, Message> {
     let copy = copy(stage);
     let block = app.block(stage);
+    let idle = app.idle_model(stage.stage()).is_some();
     let narrow = width < super::surface::NARROW_CARD;
 
     // None chosen: there is no backend to put in a card, so the section is the
@@ -152,8 +153,9 @@ pub(crate) fn section(app: &AppModel, stage: BlockStage, width: f32) -> Element<
 
     // Enabled but not running: transcripts are passing through untouched, and
     // nothing else on the card would say so. `enabled` and `loaded` are
-    // separate fields for exactly this case.
-    if block.enabled && !block.loaded {
+    // separate fields for exactly this case. Not when the model is only idle:
+    // the next use loads it.
+    if block.enabled && !block.loaded && !idle {
         card = card.push(notice(copy.not_loaded.clone()));
     }
 
@@ -163,7 +165,11 @@ pub(crate) fn section(app: &AppModel, stage: BlockStage, width: f32) -> Element<
         card = card.push(crate::ui::views::common::error_banner(message));
     }
 
-    card_surface(card, block.enabled && block.loaded)
+    if idle {
+        card = card.push(super::surface::idle_label());
+    }
+
+    card_surface(card, (block.enabled && block.loaded) || idle)
 }
 
 /// The card header for a selected backend: glyph tile, the backend's name /
@@ -234,8 +240,10 @@ fn control_row<'a>(
     backend: &'a BackendInfo,
 ) -> Element<'a, Message> {
     let block = app.block(stage);
+    let idle = app.idle_model(stage.stage()).is_some();
 
-    if block.enabled {
+    // An idle model shows as a running one: the next use loads it.
+    if block.enabled || idle {
         let model = block
             .model
             .clone()
@@ -265,7 +273,8 @@ fn control_row<'a>(
         if let Some(lang_button) = language_button(stage.stage(), backend, &model, app) {
             rows.push((crate::fl!("language"), None, lang_button));
         }
-        if stage == BlockStage::Synthesis {
+        // Nothing to reload while the model is out of memory.
+        if stage == BlockStage::Synthesis && !idle {
             buttons.push(reload_button(app, stage));
         }
         buttons.push(
@@ -375,7 +384,7 @@ fn reload_button(app: &AppModel, stage: BlockStage) -> Element<'_, Message> {
 /// pickers show.
 fn card_model(app: &AppModel, stage: BlockStage, backend: &BackendInfo) -> Option<String> {
     let block = app.block(stage);
-    if block.enabled {
+    if block.enabled || app.idle_model(stage.stage()).is_some() {
         block.model.clone()
     } else {
         shown_model(

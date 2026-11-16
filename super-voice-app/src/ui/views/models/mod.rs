@@ -135,14 +135,15 @@ fn feature_pill<'a>(
     )
 }
 
-/// A round dot in `status`'s color: gray for no backend, yellow for idle or
-/// loading, green for ready, red for setup incomplete or not running.
+/// A round dot in `status`'s color: gray for no backend, yellow for nothing
+/// loaded or loading, green for ready or idle, red for setup incomplete or not
+/// running.
 fn status_dot<'a>(status: ModelStatus, size: f32) -> Element<'a, Message> {
     let color_fn: fn(&cosmic::Theme) -> cosmic::iced::Color = match status {
         ModelStatus::None => |t| t.cosmic().palette.neutral_5.into(),
         ModelStatus::Blocked | ModelStatus::Failed => |t| t.cosmic().destructive.base.into(),
-        ModelStatus::Idle => |t| t.cosmic().warning.base.into(),
-        ModelStatus::Ready => |t| t.cosmic().success.base.into(),
+        ModelStatus::NotLoaded => |t| t.cosmic().warning.base.into(),
+        ModelStatus::Ready | ModelStatus::Idle => |t| t.cosmic().success.base.into(),
     };
     widget::container(widget::text(""))
         .width(Length::Fixed(size))

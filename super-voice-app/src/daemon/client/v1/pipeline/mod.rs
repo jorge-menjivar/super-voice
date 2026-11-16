@@ -23,7 +23,7 @@ pub(crate) mod voice;
 use crate::state::Stage;
 use super_voice_shared::daemon::http_client::HttpResult;
 
-pub use model::StageDevice;
+pub use model::{ModelState, StageDevice};
 
 /// One pipeline stage as a card renders it.
 ///
@@ -48,6 +48,9 @@ pub struct StageState {
     pub model: Option<String>,
     /// Whether that model is up.
     pub loaded: bool,
+    /// Where that model stands, as the daemon says: loaded, idle (out of
+    /// memory, and the next request that needs it loads it), or not loaded.
+    pub state: ModelState,
     /// The device the selection runs on; `None` when nothing is selected.
     ///
     /// Read through [`Self::running_device`]. The value a device *picker*
@@ -91,6 +94,7 @@ pub async fn get_stage_view(stage: Stage) -> HttpResult<StageState> {
         source: backend.source,
         name: backend.name,
         enabled: switched_on(stage, backend.enabled, model.loaded),
+        state: model.state,
         model: model.model,
         loaded: model.loaded,
         device: model.device,

@@ -27,7 +27,7 @@ use cosmic::prelude::*;
 
 use crate::core::app::AppModel;
 use crate::daemon::backends::BackendInfo;
-use crate::daemon::client::StageState;
+use crate::daemon::client::{ModelState, StageState};
 use crate::daemon::client::{
     clear_stage_backend, get_model_device, list_model_devices, list_stage_backends,
     list_stage_devices, reload_stage_model, set_model_device, set_stage_backend, set_stage_model,
@@ -278,6 +278,31 @@ impl AppModel {
 
     // ---- STAGE-SPECIFIC (2/4): where a stage holds the model it has up ----
 
+    /// The model `stage` keeps while it is out of memory until its next use:
+    /// the daemon reports it idle, and nothing is under way on the stage. Its
+    /// card shows it ready, marked idle.
+    #[must_use]
+    pub fn idle_model(&self, stage: Stage) -> Option<&str> {
+        if !self.is_model_ready(stage) {
+            return None;
+        }
+        match stage.block() {
+            None => {
+                let (model, source) = self.transcription_idle.as_ref()?;
+                let selected = self.models_page.active_backend.as_deref() == Some(source.as_str());
+                (self.current_model.is_empty() && selected).then_some(model.as_str())
+            }
+            Some(block) => {
+                let block = self.block(block);
+                if block.state == ModelState::Idle {
+                    block.model.as_deref()
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// The model `stage` is currently running, as the app knows it.
     ///
     /// Stage 1 keeps its identity locally, kept live by the daemon's events;
@@ -511,7 +536,7 @@ impl AppModel {
         // Load — sending it would move the wrong model.
         let picked = self.staged_picks.get(stage).map(|pick| pick.model.clone());
         let Some(running) = self.loaded_model(stage).map(ToString::to_string) else {
-            return Task::none();
+            return self.choose_idle_device(stage, picked.as_deref(), device, previous);
         };
         if picked.as_deref() != Some(running.as_str()) {
             return Task::none();
@@ -547,6 +572,37 @@ impl AppModel {
                 Err(e) => cosmic::Action::App(Message::Stage(StageMessage::DeviceChangeFailed {
                     stage,
                     prev_device: prev_device.clone(),
+                    message: e.to_string(),
+                })),
+            },
+        )
+    }
+
+    /// A device chosen for an idle model: the daemon keeps it for the next
+    /// load, which the next request starts. Nothing loads now, as nothing did
+    /// before the model went idle either.
+    fn choose_idle_device(
+        &self,
+        stage: Stage,
+        picked: Option<&str>,
+        device: String,
+        previous: Option<String>,
+    ) -> Task<cosmic::Action<Message>> {
+        let Some(model) = self.idle_model(stage).map(ToString::to_string) else {
+            return Task::none();
+        };
+        if picked != Some(model.as_str()) {
+            return Task::none();
+        }
+        Task::perform(
+            set_model_device(stage, model, device),
+            move |result| match result {
+                Ok(()) => stage.block().map_or(cosmic::Action::None, |block| {
+                    cosmic::Action::App(Message::Stage(StageMessage::RefreshBlock { stage: block }))
+                }),
+                Err(e) => cosmic::Action::App(Message::Stage(StageMessage::DeviceChangeFailed {
+                    stage,
+                    prev_device: previous.clone(),
                     message: e.to_string(),
                 })),
             },
@@ -639,6 +695,8 @@ impl AppModel {
     fn unload_stage(&mut self, stage: Stage) -> Task<cosmic::Action<Message>> {
         if stage == Stage::Transcription {
             self.clear_loaded_model();
+            // An Unload switches the stage off, so nothing waits to load.
+            self.transcription_idle = None;
         }
         self.model_operations.set_ready(stage);
         Task::perform(unload_stage_model(stage), move |result| match result {

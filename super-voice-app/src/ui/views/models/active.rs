@@ -55,6 +55,7 @@ pub(super) fn active_backend_card<'a>(
     let spacing = cosmic::theme::spacing();
     let source = backend.source.clone();
     let model_loaded = !app.current_source.is_empty() && app.current_source == backend.source;
+    let idle_model = app.idle_model(Stage::Transcription);
     let missing = unmet_requirements(&app.backend_secret_configured, backend);
 
     // Header: glyph + name/description, then the repo button, Configure, and
@@ -110,15 +111,18 @@ pub(super) fn active_backend_card<'a>(
     }
     card = card.push(chip_row);
 
-    // Loaded vs idle. When a model is loaded for this backend, show a summary
-    // and an Unload button; otherwise show the model + device staging row
-    // with a Load button. Requirements-unmet skips both — the warnings below
-    // are the only path forward. A divider sets the launch controls apart from
-    // the header/chips above.
+    // Loaded or not. When a model is loaded for this backend, or is out of
+    // memory until its next use, show a summary and an Unload button;
+    // otherwise show the model + device staging row with a Load button.
+    // Requirements-unmet skips both — the warnings below are the only path
+    // forward. A divider sets the launch controls apart from the header/chips
+    // above.
     if missing.is_empty() {
         card = card.push(card_divider());
         if model_loaded {
-            card = card.push(loaded_model_summary(backend, app));
+            card = card.push(loaded_model_summary(backend, &app.current_model, app));
+        } else if let Some(model) = idle_model {
+            card = card.push(loaded_model_summary(backend, model, app));
         } else {
             card = card.push(staged_model_picker(backend, app));
         }
@@ -134,6 +138,10 @@ pub(super) fn active_backend_card<'a>(
     // The model operation status, when it is this stage's.
     if let Some(status) = operation_status(app, Stage::Transcription) {
         card = card.push(status);
+    }
+
+    if missing.is_empty() && !model_loaded && idle_model.is_some() {
+        card = card.push(super::surface::idle_label());
     }
 
     card_surface(card, true)
@@ -211,34 +219,29 @@ pub(super) fn device_note(app: &AppModel, stage: Stage, source: &str) -> Option<
     )
 }
 
-/// Summary shown in the active-backend card when a model is currently
-/// loaded for this backend. Reads as e.g. "Active: whisper-1" with its device
-/// picker, and an Unload button on the right; the Unload click drops the model
-/// but keeps the active backend — and the model — selected.
+/// Summary shown in the active-backend card when `model` is loaded for this
+/// backend, or out of memory until its next use. Reads as e.g. "Active:
+/// whisper-1" with its device picker, and an Unload button on the right; the
+/// Unload click drops the model but keeps the active backend — and the model —
+/// selected.
 pub(super) fn loaded_model_summary<'a>(
     backend: &'a BackendInfo,
+    model: &'a str,
     app: &'a AppModel,
 ) -> Element<'a, Message> {
-    let running = text::body(app.current_model.clone()).class(cosmic::theme::Text::Accent);
+    let running = text::body(model.to_string()).class(cosmic::theme::Text::Accent);
     let mut rows: Vec<super::surface::ControlRow<'a>> =
         vec![(crate::fl!("model"), None, running.into())];
     let mut buttons = Vec::new();
     // The same picker the unloaded card shows, in the same place. Changing it
     // now reloads the model onto the new device rather than staging a choice
     // for a Load that is not coming.
-    if let Some(devices) = device_dropdown(
-        Stage::Transcription,
-        &backend.source,
-        &app.current_model,
-        app,
-    ) {
+    if let Some(devices) = device_dropdown(Stage::Transcription, &backend.source, model, app) {
         let note = device_note(app, Stage::Transcription, &backend.source);
         rows.push((crate::fl!("runs-on"), note, devices));
     }
     // Per-model language, for a multilingual model.
-    if let Some(lang_button) =
-        language_button(Stage::Transcription, backend, &app.current_model, app)
-    {
+    if let Some(lang_button) = language_button(Stage::Transcription, backend, model, app) {
         rows.push((crate::fl!("language"), None, lang_button));
     }
     // A leading stop glyph fronts the Unload label, mirroring the Load button's

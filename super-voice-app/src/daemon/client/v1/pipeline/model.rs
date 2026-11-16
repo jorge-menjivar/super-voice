@@ -16,6 +16,7 @@ use crate::daemon::client::internal::session::with_settings_token;
 use crate::state::Stage;
 use super_voice_shared::daemon::http_client::HttpResult;
 use super_voice_shared::daemon::http_client::transport;
+pub use super_voice_shared::models::protocol::ModelState;
 
 /// Which accelerator a stage's model runs on.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -46,6 +47,11 @@ pub struct StageModel {
     pub model: Option<String>,
     #[serde(default)]
     pub loaded: bool,
+    /// Where the model stands: loaded, idle (out of memory until its next use
+    /// loads it), or not loaded. The daemon's to say: it decides whether the
+    /// next request loads the model.
+    #[serde(default)]
+    pub state: ModelState,
     /// `None` when nothing is selected.
     #[serde(default)]
     pub device: Option<StageDevice>,
@@ -89,6 +95,8 @@ struct SlotPayload {
     model: Option<String>,
     #[serde(default)]
     loaded: bool,
+    #[serde(default)]
+    state: ModelState,
     #[serde(default)]
     device: Option<StageDevice>,
     #[serde(default)]
@@ -134,6 +142,7 @@ pub async fn get_stage_model(stage: Stage) -> HttpResult<StageModel> {
         Ok(StageModel {
             model: envelope.model.model,
             loaded: envelope.model.loaded,
+            state: envelope.model.state,
             device: envelope.model.device,
         })
     })
