@@ -15,7 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::pipeline::default_stage;
+use super::pipeline::{ModelState, default_stage};
 
 /// A `daemon_status_changed` event. The wire `status` field is the discriminant;
 /// variant names map to it via `rename_all = "snake_case"`.
@@ -60,6 +60,13 @@ pub enum DaemonStatusEvent {
     /// them (a device switch carries device context; an unload carries none).
     Ready {
         model_loaded: bool,
+        /// Where the stage's model stands: `loaded`, `idle` (out of memory, and
+        /// the next request that needs it loads it), or `not_loaded`. What
+        /// `model_loaded: false` alone does not say: an idle unload leaves the
+        /// model `idle`, an unload leaves it `not_loaded`. A daemon that
+        /// predates it sends none, read as `not_loaded`.
+        #[serde(default)]
+        model_state: ModelState,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model_name: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -107,7 +114,7 @@ pub enum DaemonStatusEvent {
 #[cfg(test)]
 mod tests {
     use super::DaemonStatusEvent;
-    use crate::models::protocol::{POST_PROCESSOR_STAGE, TRANSCRIPTION_STAGE};
+    use crate::models::protocol::{ModelState, POST_PROCESSOR_STAGE, TRANSCRIPTION_STAGE};
 
     /// The wire discriminant is `status`, and variant/field names match the
     /// hand-built JSON the daemon used to emit.
@@ -159,12 +166,13 @@ mod tests {
         }
     }
 
-    /// `ready` from an unload carries only `model_loaded`; the optional device
-    /// fields stay absent (not serialized).
+    /// `ready` from an unload carries only `model_loaded` and `model_state`;
+    /// the optional device fields stay absent (not serialized).
     #[test]
     fn ready_omits_absent_optionals() {
         let json = serde_json::to_value(DaemonStatusEvent::Ready {
             model_loaded: false,
+            model_state: ModelState::Idle,
             model_name: None,
             actual_device: None,
             preferred_device: None,
@@ -173,7 +181,21 @@ mod tests {
         .unwrap();
         assert_eq!(json["status"], "ready");
         assert_eq!(json["model_loaded"], false);
+        assert_eq!(json["model_state"], "idle");
         assert!(json.get("actual_device").is_none());
+    }
+
+    /// A daemon older than `model_state` sends none, which reads as
+    /// `not_loaded`: nothing it said promised the next request loads a model.
+    #[test]
+    fn an_absent_model_state_reads_as_not_loaded() {
+        let v = serde_json::json!({ "status": "ready", "model_loaded": false });
+        match serde_json::from_value::<DaemonStatusEvent>(v).unwrap() {
+            DaemonStatusEvent::Ready { model_state, .. } => {
+                assert_eq!(model_state, ModelState::NotLoaded);
+            }
+            other => panic!("wrong variant: {other:?}"),
+        }
     }
 
     /// Stage 2 reports its own lifecycle on the same topic, and the number is
@@ -183,6 +205,7 @@ mod tests {
     fn a_post_processors_events_carry_stage_two() {
         let json = serde_json::to_value(DaemonStatusEvent::Ready {
             model_loaded: true,
+            model_state: ModelState::Loaded,
             model_name: Some("s1-mini".into()),
             actual_device: Some("cpu".into()),
             preferred_device: None,

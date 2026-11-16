@@ -12,7 +12,9 @@ use std::future::Future;
 use std::time::Duration;
 use super_engine_daemon::model_slot::ModelSlot;
 use super_engine_daemon::stage::{ModelId, Stage, StageEvent, StageModel};
-use super_voice_shared::tts::models::protocol::DaemonStatusEvent;
+use super_voice_shared::tts::models::protocol::{DaemonStatusEvent, ModelState};
+
+use crate::daemon::pipeline_handlers::model_state;
 
 impl StageModel for LoadedModel {
     fn id(&self) -> ModelId {
@@ -34,11 +36,13 @@ impl SuperTTSDaemon {
         TtsStage(self.clone())
     }
 
-    /// Announce that the synthesis stage runs no model.
-    fn announce_stage_empty(&self) {
+    /// Announce that the synthesis stage runs no model, and whether the next
+    /// speak loads one.
+    fn announce_stage_empty(&self, loads_on_demand: bool) {
         self.events
             .publish_synthesis_status(DaemonStatusEvent::Ready {
                 model_loaded: false,
+                model_state: model_state(false, loads_on_demand),
                 model_name: None,
                 actual_device: None,
                 preferred_device: None,
@@ -102,10 +106,14 @@ impl Stage for TtsStage {
             StageEvent::Loaded { model, device } => {
                 daemon.broadcast_model_active(&model.name, &model.source, device);
             }
-            StageEvent::Unloaded => daemon.announce_stage_empty(),
-            StageEvent::LoadFailed { .. } => {
+            StageEvent::Unloaded { loads_on_demand } => {
+                daemon.announce_stage_empty(loads_on_demand);
+            }
+            StageEvent::LoadFailed {
+                loads_on_demand, ..
+            } => {
                 daemon.download_manager.clear_download(());
-                daemon.announce_stage_empty();
+                daemon.announce_stage_empty(loads_on_demand);
             }
             StageEvent::SwitchingDevice { model, from, to } => {
                 daemon
@@ -146,6 +154,7 @@ impl Stage for TtsStage {
                     .events
                     .publish_synthesis_status(DaemonStatusEvent::Ready {
                         model_loaded: true,
+                        model_state: ModelState::Loaded,
                         model_name: Some(model.name.clone()),
                         actual_device: Some(device.to_string()),
                         preferred_device: Some(preferred.to_string()),

@@ -15,6 +15,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::models::protocol::ModelState;
+
 /// A `daemon_status_changed` event. The wire `status` field is the discriminant;
 /// variant names map to it via `rename_all = "snake_case"`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +43,13 @@ pub enum DaemonStatusEvent {
     /// them (a device switch carries device context; an unload carries none).
     Ready {
         model_loaded: bool,
+        /// Where the stage's model stands: `loaded`, `idle` (out of memory, and
+        /// the next request that needs it loads it), or `not_loaded`. What
+        /// `model_loaded: false` alone does not say: an idle unload leaves the
+        /// model `idle`, an unload leaves it `not_loaded`. A daemon that
+        /// predates it sends none, read as `not_loaded`.
+        #[serde(default)]
+        model_state: ModelState,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model_name: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -107,7 +116,7 @@ pub enum DaemonStatusEvent {
 
 #[cfg(test)]
 mod tests {
-    use super::DaemonStatusEvent;
+    use super::{DaemonStatusEvent, ModelState};
 
     /// The preparation pair is what a client watches to explain a pause before
     /// speech, so its discriminants and its one optional field have to be
@@ -197,6 +206,7 @@ mod tests {
     fn ready_omits_absent_optionals() {
         let json = serde_json::to_value(DaemonStatusEvent::Ready {
             model_loaded: false,
+            model_state: ModelState::NotLoaded,
             model_name: None,
             actual_device: None,
             preferred_device: None,
@@ -204,6 +214,7 @@ mod tests {
         .unwrap();
         assert_eq!(json["status"], "ready");
         assert_eq!(json["model_loaded"], false);
+        assert_eq!(json["model_state"], "not_loaded");
         assert!(json.get("actual_device").is_none());
     }
 }

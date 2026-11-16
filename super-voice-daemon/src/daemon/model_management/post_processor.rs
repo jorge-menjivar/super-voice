@@ -68,7 +68,11 @@ impl SuperSTTDaemon {
         };
         if unloaded.model.is_some() {
             info!("Post-processor unloaded");
-            self.announce_stage_empty(PipelineStage::PostProcessor);
+            let loads_on_demand = self
+                .stage(PipelineStage::PostProcessor)
+                .loads_on_demand()
+                .await;
+            self.announce_stage_empty(PipelineStage::PostProcessor, loads_on_demand);
         }
     }
 

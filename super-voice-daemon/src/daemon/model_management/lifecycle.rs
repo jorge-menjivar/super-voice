@@ -3,7 +3,7 @@ use crate::daemon::device_management::PipelineStage;
 use crate::daemon::types::{LoadedModel, SuperSTTDaemon};
 use log::{info, warn};
 use super_engine_daemon::stage::{Load, StageExt, Unload};
-use super_voice_shared::models::protocol::{DaemonResponse, DaemonStatusEvent};
+use super_voice_shared::models::protocol::{DaemonResponse, DaemonStatusEvent, ModelState};
 
 impl SuperSTTDaemon {
     /// Re-instantiate the currently-loaded model in place (same identity) so a
@@ -59,6 +59,7 @@ impl SuperSTTDaemon {
             });
         self.events.publish_daemon_status(DaemonStatusEvent::Ready {
             model_loaded: true,
+            model_state: ModelState::Loaded,
             model_name: Some(name.to_string()),
             actual_device: Some(actual_device.to_string()),
             preferred_device: None,

@@ -13,7 +13,9 @@ use std::future::Future;
 use std::time::Duration;
 use super_engine_daemon::model_slot::ModelSlot;
 use super_engine_daemon::stage::{ModelId, Stage, StageEvent, StageModel, Stages};
-use super_voice_shared::models::protocol::DaemonStatusEvent;
+use super_voice_shared::models::protocol::{DaemonStatusEvent, ModelState};
+
+use crate::daemon::pipeline_handlers::model_state;
 
 impl StageModel for LoadedModel {
     fn id(&self) -> ModelId {
@@ -53,10 +55,16 @@ impl SuperSTTDaemon {
             .with(self.tts.stage())
     }
 
-    /// Announce that `stage` runs no model.
-    pub(in crate::daemon) fn announce_stage_empty(&self, stage: PipelineStage) {
+    /// Announce that `stage` runs no model, and whether the next request that
+    /// needs one loads it.
+    pub(in crate::daemon) fn announce_stage_empty(
+        &self,
+        stage: PipelineStage,
+        loads_on_demand: bool,
+    ) {
         self.events.publish_daemon_status(DaemonStatusEvent::Ready {
             model_loaded: false,
+            model_state: model_state(false, loads_on_demand),
             model_name: None,
             actual_device: None,
             preferred_device: None,
@@ -138,10 +146,14 @@ impl Stage for SttStage {
             StageEvent::Loaded { model, device } => {
                 daemon.broadcast_model_active(&model.name, &model.source, device, self.stage);
             }
-            StageEvent::Unloaded => daemon.announce_stage_empty(self.stage),
-            StageEvent::LoadFailed { .. } => {
+            StageEvent::Unloaded { loads_on_demand } => {
+                daemon.announce_stage_empty(self.stage, loads_on_demand);
+            }
+            StageEvent::LoadFailed {
+                loads_on_demand, ..
+            } => {
                 daemon.download_manager.clear_download(stage);
-                daemon.announce_stage_empty(self.stage);
+                daemon.announce_stage_empty(self.stage, loads_on_demand);
             }
             StageEvent::SwitchingDevice { model, from, to } => {
                 daemon
@@ -185,6 +197,7 @@ impl Stage for SttStage {
                     .events
                     .publish_daemon_status(DaemonStatusEvent::Ready {
                         model_loaded: true,
+                        model_state: ModelState::Loaded,
                         model_name: Some(model.name.clone()),
                         actual_device: Some(device.to_string()),
                         preferred_device: Some(preferred.to_string()),
