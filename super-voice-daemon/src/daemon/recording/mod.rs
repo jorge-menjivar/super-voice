@@ -202,7 +202,7 @@ impl SuperSTTDaemon {
         };
 
         // Wait for recording to complete and return the transcription.
-        match self
+        let outcome = self
             .record_and_transcribe(
                 claim,
                 typer,
@@ -215,8 +215,10 @@ impl SuperSTTDaemon {
                 request_language,
                 load,
             )
-            .await
-        {
+            .await;
+        // The models' idle time starts when the take ends, however it ended.
+        self.finished_using_pipeline();
+        match outcome {
             // Cycle completed successfully (empty text = no speech, still success).
             Ok(Ok(transcription)) => {
                 if transcription.trim().is_empty() {

@@ -56,6 +56,8 @@ impl SuperSTTDaemon {
         let transcription_result = self
             .run_transcription(processed_audio, language.as_deref())
             .await;
+        // The models' idle time starts when the transcription ends.
+        self.finished_using_pipeline();
 
         // Handle the result of the transcription task
         match transcription_result {

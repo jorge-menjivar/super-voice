@@ -186,6 +186,15 @@ impl SuperSTTDaemon {
                 let _ = shutdown.recv().await;
             }
         });
+        // A recording's end touches speech to text's models itself; an
+        // utterance's end is announced on the bus, which text to speech's
+        // model listens to.
+        self.tts.spawn_touch_on_speech_end({
+            let mut shutdown = self.shutdown_tx.subscribe();
+            async move {
+                let _ = shutdown.recv().await;
+            }
+        });
         stages.load_at_startup().await;
 
         // The shortcuts the user added through the portal are bound again: the

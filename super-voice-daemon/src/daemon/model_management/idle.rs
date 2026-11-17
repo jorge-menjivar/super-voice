@@ -118,6 +118,18 @@ impl SuperSTTDaemon {
         })
     }
 
+    /// Count every stage's idle time from now: a request that just ended
+    /// used them all, a recording or a transcription of uploaded audio.
+    ///
+    /// Each counts its use when it starts, and the idle loop counts a
+    /// recording in progress as use only when it checks, every few seconds.
+    /// Without this a model went to sleep up to one check early: counted from
+    /// the last check during a take, not from its end.
+    pub(crate) fn finished_using_pipeline(&self) {
+        self.model.touch();
+        self.post_processor.touch();
+    }
+
     /// The transcription model's definition: the loaded model's, or while it
     /// is not in memory, the selected one's. What a recording needs to know
     /// about its model before the model has loaded.
