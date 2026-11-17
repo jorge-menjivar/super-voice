@@ -2985,10 +2985,11 @@ async fn handle_transcribe_reports_backend_failure_as_error() {
         .await;
 
     assert_eq!(resp.status, "error");
-    assert!(
-        resp.message.as_deref().unwrap_or("").contains("failed"),
-        "error message should name the failure: {:?}",
-        resp.message
+    // Said once: the message read "Transcription failed: Transcription
+    // failed: …" when both layers prefixed it.
+    assert_eq!(
+        resp.message.as_deref(),
+        Some("Transcription failed: scripted backend failure")
     );
 }
 

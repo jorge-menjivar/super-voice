@@ -145,9 +145,9 @@ impl SuperSTTDaemon {
             // genuine error the caller must report.
             Err(DispatchError::Failed(e)) => {
                 warn!("Transcription failed: {e}");
-                Ok(Err(RunTranscriptionError::Failed(anyhow::anyhow!(
-                    "Transcription failed: {e}"
-                ))))
+                // Unprefixed: the caller's message already says the
+                // transcription failed.
+                Ok(Err(RunTranscriptionError::Failed(e)))
             }
             Err(DispatchError::NotLoaded) => {
                 error!("Model not loaded");
