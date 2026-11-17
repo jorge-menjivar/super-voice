@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use super_voice_shared::daemon::http_client::HttpError;
 
 /// Build the audio-theme rollback message: restore the captured pre-save theme
-/// fields and raise a Customization banner (audit Tier 3 #37).
+/// fields and raise a banner on the Behavior tab (audit Tier 3 #37).
 fn audio_theme_save_failed(
     prev_selected: AudioTheme,
     prev_non_silent: AudioTheme,
@@ -122,8 +122,8 @@ impl AppModel {
     ) -> Task<cosmic::Action<Message>> {
         match message {
             RecordingMessage::AudioFeedbackToggled(enabled) => {
-                // Clear any stale Customization banner as the user retries.
-                self.clear_action_error(ErrorScope::Customization);
+                // Clear any stale banner as the user retries.
+                self.clear_action_error(ErrorScope::Recording);
                 // Capture the pre-optimistic values so a failed save can roll
                 // the UI back instead of leaving it stuck on the value the
                 // daemon rejected (audit Tier 3 #37).
@@ -151,7 +151,7 @@ impl AppModel {
             }
 
             RecordingMessage::AudioThemeSelected(theme) => {
-                self.clear_action_error(ErrorScope::Customization);
+                self.clear_action_error(ErrorScope::Recording);
                 let prev_selected = self.selected_audio_theme;
                 let prev_non_silent = self.last_non_silent_theme;
                 self.selected_audio_theme = theme;
@@ -178,7 +178,7 @@ impl AppModel {
             } => {
                 self.selected_audio_theme = prev_selected;
                 self.last_non_silent_theme = prev_non_silent;
-                self.set_action_error(ErrorScope::Customization, message);
+                self.set_action_error(ErrorScope::Recording, message);
                 Task::none()
             }
 
@@ -196,7 +196,7 @@ impl AppModel {
             }
 
             RecordingMessage::VolumeCommit => {
-                self.clear_action_error(ErrorScope::Customization);
+                self.clear_action_error(ErrorScope::Recording);
                 // The drag already clobbered `self.volume`, so the rollback
                 // target is the last committed value. Advance it optimistically
                 // and capture the prior committed value for a possible rollback
@@ -221,7 +221,7 @@ impl AppModel {
             } => {
                 self.volume = prev_volume;
                 self.last_committed_volume = prev_volume;
-                self.set_action_error(ErrorScope::Customization, message);
+                self.set_action_error(ErrorScope::Recording, message);
                 Task::none()
             }
 

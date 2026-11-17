@@ -249,9 +249,6 @@ impl AppModel {
     fn page_body(&self, page: Page) -> Element<'_, Message> {
         match page {
             Page::Customization => views::customization::page(
-                &self.audio_themes,
-                &self.selected_audio_theme,
-                self.volume,
                 self.language.primary_language.as_deref(),
                 self.notification_method,
                 self.idle_unload_secs,
