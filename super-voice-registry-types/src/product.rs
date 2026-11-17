@@ -488,25 +488,6 @@ pub struct VoiceIndexModel {
     pub clones_voices: bool,
 }
 
-/// The backend-level fields Super Voice's index carries beside `online`,
-/// `supports_gpu` and `supports_cpu`: what the backend's models can do, summed
-/// up from their [`VoiceIndexModel`]s, so a client reads it off the entry
-/// without walking the models.
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct VoiceIndexBackend {
-    /// Whether any of the backend's models takes the user's dictation context
-    /// ([`VoiceIndexModel::accepts_context`]). An index published before the
-    /// field existed has none, and is read as `false`.
-    #[serde(default)]
-    pub accepts_context: bool,
-    /// Whether any of the backend's models speaks in a voice the user cloned
-    /// ([`VoiceIndexModel::clones_voices`]). An index published before the
-    /// field existed has none, and is read as `false`.
-    #[serde(default)]
-    pub clones_voices: bool,
-}
-
 /// The index's role when an entry has none: [`ModelRole`]'s default, spelled,
 /// so the two cannot drift.
 fn default_role() -> String {
@@ -594,7 +575,6 @@ impl Product for Voice {
     type Capabilities = VoiceCapabilities;
     type Model = VoiceModel;
     type IndexModel = VoiceIndexModel;
-    type IndexBackend = VoiceIndexBackend;
 
     const SLUG: &'static str = "super-voice";
 
@@ -711,11 +691,21 @@ impl Product for Voice {
         }
     }
 
-    fn index_backend(models: &[IndexModel<VoiceIndexModel>]) -> VoiceIndexBackend {
-        VoiceIndexBackend {
-            accepts_context: models.iter().any(|m| m.product.accepts_context),
-            clones_voices: models.iter().any(|m| m.product.clones_voices),
-        }
+    fn index_supports(models: &[IndexModel<VoiceIndexModel>]) -> Vec<String> {
+        [
+            (
+                crate::index::supports::DICTATION_CONTEXT,
+                models.iter().any(|m| m.product.accepts_context),
+            ),
+            (
+                crate::index::supports::VOICE_CLONING,
+                models.iter().any(|m| m.product.clones_voices),
+            ),
+        ]
+        .into_iter()
+        .filter(|(_, listed)| *listed)
+        .map(|(entry, _)| entry.to_string())
+        .collect()
     }
 }
 

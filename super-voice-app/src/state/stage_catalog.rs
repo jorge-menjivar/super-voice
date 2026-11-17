@@ -103,8 +103,7 @@ mod tests {
             models,
             secrets: Vec::new(),
             options: Vec::new(),
-            accepts_context: false,
-            clones_voices: false,
+            supports: Vec::new(),
         }
     }
 

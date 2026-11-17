@@ -14,6 +14,7 @@ use super::chips::{
     model_device_chips, role_label,
 };
 use super::surface::{card_divider, muted_text_color};
+use super_voice_registry_types::index::supports;
 
 /// Right-side "Install manually" sheet, rendered as a COSMIC context drawer.
 ///
@@ -243,13 +244,13 @@ fn resolved_preview(
         col = col.push(text::body(desc.to_string()).class(cosmic::theme::Text::Color(muted)));
     }
 
-    let egress = b.online.then_some(CloudEgress {
+    let egress = supports::has(&b.supports, supports::ONLINE).then_some(CloudEgress {
         hosts: b.allowed_hosts.as_slice(),
         user_url: false,
     });
     if let Some(chips) = capability_chips(
-        b.supports_gpu,
-        b.supports_cpu,
+        supports::has(&b.supports, supports::GPU),
+        supports::has(&b.supports, supports::CPU),
         egress,
         entry_accepts_context(b),
         entry_clones_voices(b),

@@ -3,6 +3,7 @@ use cosmic::iced::Alignment;
 use cosmic::iced::widget::row;
 use cosmic::widget::{self, text};
 use cosmic::{Apply, Element};
+use super_voice_registry_types::index::supports;
 
 use crate::state::registry::{FeatureFilter, RoleFilter};
 use crate::ui::icons;
@@ -122,30 +123,15 @@ pub(super) fn update_progress_chip(
 /// Whether a backend's models are served by an online provider. Online
 /// backends transmit audio to a third-party service, flagged in the UI.
 pub(super) fn backend_is_online(backend: &crate::daemon::backends::BackendInfo) -> bool {
-    backend
-        .models
-        .iter()
-        .any(|m| m.supported_devices.iter().any(|d| d == "none"))
+    supports::has(&backend.supports, supports::ONLINE)
 }
 
 /// Whether this backend's *installed build* can run models on a GPU. Drives
-/// the "GPU" capability chip on the backend card.
-///
-/// Reads `installed_accel` — the accel of the asset actually on disk — rather
-/// than the manifest alone: a CUDA-only backend installed on an AMD host
-/// lands on its CPU asset, and the chip must not claim a capability that
-/// asset does not have. An empty `installed_accel` means no record (a
-/// local-directory import, or an install predating it), so this falls back
-/// to the models' declared `supported_devices`.
+/// the "GPU" capability chip on the backend card. The daemon decides it from
+/// the build on disk, so a CUDA-only backend installed on an AMD host, which
+/// lands on its CPU build, does not claim one.
 pub(super) fn backend_supports_gpu(backend: &crate::daemon::backends::BackendInfo) -> bool {
-    if !backend.installed_accel.is_empty() {
-        return backend.installed_accel.iter().any(|a| a != "cpu");
-    }
-    backend.models.iter().any(|m| {
-        m.supported_devices
-            .iter()
-            .any(|d| d == "cuda" || d == "metal" || d == "gpu")
-    })
+    supports::has(&backend.supports, supports::GPU)
 }
 
 /// What a stage's backend can run its models on, as the capability chips read
@@ -200,11 +186,11 @@ pub(super) fn stage_chips(
 }
 
 /// Whether a backend in the catalog takes the user's dictation context, which
-/// earns its card the Contexts chip. The index sums it up on the entry from its
-/// models. An index or a daemon from before the field says nothing, and reads
+/// earns its card the Contexts chip. The index lists it on the entry, from its
+/// models. An index or a daemon from before the list says nothing, and reads
 /// as no.
 pub(super) fn entry_accepts_context(entry: &super_voice_shared::registry::RegistryBackend) -> bool {
-    entry.product.accepts_context
+    supports::has(&entry.supports, supports::DICTATION_CONTEXT)
 }
 
 /// Whether a stage's backend is handed the user's dictation context for any of
@@ -229,11 +215,11 @@ fn stage_hears_context(
 }
 
 /// Whether a backend in the catalog has a model that speaks in cloned voices,
-/// which earns its card the Voice Cloning chip. The index sums it up on the
-/// entry from its models. An index or a daemon from before the field says
+/// which earns its card the Voice Cloning chip. The index lists it on the
+/// entry, from its models. An index or a daemon from before the list says
 /// nothing, and reads as no.
 pub(super) fn entry_clones_voices(entry: &super_voice_shared::registry::RegistryBackend) -> bool {
-    entry.product.clones_voices
+    supports::has(&entry.supports, supports::VOICE_CLONING)
 }
 
 /// Whether a stage's backend offers it a model that speaks in cloned voices,
@@ -307,10 +293,7 @@ pub(super) fn model_is_online(backend: &crate::daemon::backends::BackendInfo, mo
 /// Whether any model this backend serves can run on the CPU. Drives the
 /// "CPU" capability chip on the backend card.
 pub(super) fn backend_supports_cpu(backend: &crate::daemon::backends::BackendInfo) -> bool {
-    backend
-        .models
-        .iter()
-        .any(|m| m.supported_devices.iter().any(|d| d == "cpu"))
+    supports::has(&backend.supports, supports::CPU)
 }
 
 /// Whether the user pointed this backend at an endpoint of their own — a
@@ -977,8 +960,7 @@ mod capability_tests {
                 .collect(),
             secrets: Vec::new(),
             options: Vec::new(),
-            accepts_context: false,
-            clones_voices: false,
+            supports: Vec::new(),
         }
     }
 
@@ -1009,7 +991,7 @@ mod capability_tests {
         let mut b = backend_with_devices(&[&["cpu"], &["cpu"]]);
         b.models[1].role = "synthesis".into();
         b.models[0].accepts_context = true;
-        b.accepts_context = true;
+        b.supports = vec!["dictation_context".into()];
         assert!(!stage_hears_context(crate::state::Stage::Synthesis, &b));
     }
 
@@ -1038,41 +1020,19 @@ mod capability_tests {
         assert!(stage_clones_voices(crate::state::Stage::Synthesis, &b));
     }
 
-    /// Both GPU backends (`cuda`, `metal`) surface the GPU chip, including
-    /// when paired with `cpu` in the same model's device list.
+    /// The device and cloud chips read the backend's `supports` list, and
+    /// nothing else: the daemon works it out from the models and the install
+    /// record. An entry this build does not know is skipped.
     #[test]
-    fn cuda_and_metal_count_as_gpu() {
-        assert!(backend_supports_gpu(&backend_with_devices(&[&["cuda"]])));
-        assert!(backend_supports_gpu(&backend_with_devices(&[&["metal"]])));
-        assert!(backend_supports_gpu(&backend_with_devices(&[&[
-            "cpu", "cuda"
-        ]])));
-    }
-
-    /// A `cpu`-only model is CPU-capable and not GPU-capable.
-    #[test]
-    fn cpu_only_is_cpu_not_gpu() {
-        let b = backend_with_devices(&[&["cpu"]]);
-        assert!(backend_supports_cpu(&b));
-        assert!(!backend_supports_gpu(&b));
-    }
-
-    /// The online sentinel `none` advertises no local compute at all — its
-    /// card shows the Cloud chip instead (driven separately by online-ness).
-    #[test]
-    fn online_sentinel_is_neither() {
-        let b = backend_with_devices(&[&["none"]]);
+    fn the_device_chips_read_the_list() {
+        let mut b = backend_with_devices(&[&["cpu", "gpu"]]);
         assert!(!backend_supports_gpu(&b));
         assert!(!backend_supports_cpu(&b));
-    }
-
-    /// Capability is the union across a backend's models: a CPU-only model
-    /// plus a GPU-only model yields both chips.
-    #[test]
-    fn capability_aggregates_across_models() {
-        let b = backend_with_devices(&[&["cpu"], &["cuda"]]);
+        assert!(!backend_is_online(&b));
+        b.supports = vec!["gpu".into(), "online".into(), "teleports".into()];
         assert!(backend_supports_gpu(&b));
-        assert!(backend_supports_cpu(&b));
+        assert!(!backend_supports_cpu(&b));
+        assert!(backend_is_online(&b));
     }
 
     /// A one-model backend whose model declares `supported` and whose install
@@ -1133,15 +1093,20 @@ mod capability_tests {
     /// not landed — falls back to the catalog rather than blanking the chips.
     #[test]
     fn an_unanswered_backend_falls_back_to_the_catalog() {
+        let listing = |supports: &[&str]| {
+            let mut backend = backend_with_install(&["cpu", "gpu"], &["cuda"]);
+            backend.supports = supports.iter().map(|s| (*s).to_string()).collect();
+            backend
+        };
         assert_eq!(
-            stage_device_support(None, &backend_with_install(&["cpu", "gpu"], &["cuda"])),
+            stage_device_support(None, &listing(&["gpu", "cpu"])),
             StageCompute {
                 gpu: true,
                 cpu: true
             }
         );
         assert_eq!(
-            stage_device_support(None, &backend_with_install(&["cpu", "gpu"], &["cpu"])),
+            stage_device_support(None, &listing(&["cpu"])),
             StageCompute {
                 gpu: false,
                 cpu: true
@@ -1154,23 +1119,6 @@ mod capability_tests {
         let backend = backend_with_install(&["cpu", "gpu"], &["cuda"]);
         assert!(!model_is_online(&backend, "m"));
         assert!(!model_is_online(&backend, "absent"));
-    }
-
-    /// The install record is authoritative over the manifest, on the fallback
-    /// path the daemon does not answer for: a CUDA-labeled model on a
-    /// CPU-only install shows no GPU chip.
-    #[test]
-    fn a_cpu_only_install_hides_the_gpu_chip_even_if_the_manifest_claims_cuda() {
-        let backend = backend_with_install(&["cpu", "cuda"], &["cpu"]);
-        assert!(!backend_supports_gpu(&backend));
-    }
-
-    /// An accelerated install record is authoritative even when the model
-    /// uses the unified `"gpu"` spelling instead of a legacy accel name.
-    #[test]
-    fn an_accelerated_install_shows_the_gpu_chip() {
-        let backend = backend_with_install(&["cpu", "gpu"], &["rocm"]);
-        assert!(backend_supports_gpu(&backend));
     }
 
     /// Build a backend declaring a `base_url` option with the given effective
@@ -1249,7 +1197,7 @@ mod update_offer_tests {
             online: true,
             supports_gpu: false,
             supports_cpu: false,
-            product: super_voice_registry_types::index::VoiceIndexBackend::default(),
+            supports: Vec::new(),
             models: Vec::new(),
             secrets: Vec::new(),
             options: Vec::new(),
@@ -1273,7 +1221,7 @@ mod update_offer_tests {
     fn a_catalog_entry_takes_a_context_when_the_index_says_so() {
         let mut e = entry(None, "1.0.0");
         assert!(!entry_accepts_context(&e));
-        e.product.accepts_context = true;
+        e.supports = vec!["dictation_context".to_string()];
         assert!(entry_accepts_context(&e));
     }
 
@@ -1283,7 +1231,7 @@ mod update_offer_tests {
     fn a_catalog_entry_clones_voices_when_the_index_says_so() {
         let mut e = entry(None, "1.0.0");
         assert!(!super::entry_clones_voices(&e));
-        e.product.clones_voices = true;
+        e.supports = vec!["voice_cloning".to_string()];
         assert!(super::entry_clones_voices(&e));
     }
 

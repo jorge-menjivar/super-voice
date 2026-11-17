@@ -5,6 +5,7 @@ use cosmic::Element;
 use cosmic::iced::widget::{column, row};
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{self, button, space::horizontal as horizontal_space, text};
+use super_voice_registry_types::index::supports;
 use super_voice_shared::models::contexts::DictationContext;
 
 use crate::core::app::AppModel;
@@ -70,7 +71,11 @@ fn intro(app: &AppModel) -> Element<'_, Message> {
     // Which backends will actually use it. A context reaching nothing is the
     // one failure the user cannot see, so say it here rather than let them
     // wonder why nothing changed.
-    let accepting = app.backends.iter().filter(|b| b.accepts_context).count();
+    let accepting = app
+        .backends
+        .iter()
+        .filter(|b| supports::has(&b.supports, supports::DICTATION_CONTEXT))
+        .count();
     let note = if app.backends.is_empty() {
         None
     } else if accepting == 0 {

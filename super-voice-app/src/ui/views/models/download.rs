@@ -15,6 +15,7 @@ use super::chips::{
     result_count, role_groups,
 };
 use super::surface::{card_divider, card_surface, card_title_block, muted_text_color, repo_button};
+use super_voice_registry_types::index::supports;
 
 /// Browse tab split into its two regions: the fixed search + filter toolbar
 /// (with the live result count) and the scrollable list of backend cards.
@@ -54,7 +55,7 @@ pub(super) fn download_split(app: &AppModel) -> (Element<'_, Message>, Element<'
             continue;
         }
         if let Some(o) = filters.online
-            && entry.online != o
+            && supports::has(&entry.supports, supports::ONLINE) != o
         {
             continue;
         }
@@ -293,13 +294,13 @@ pub(super) fn download_card<'a>(
 
     // Browse describes a backend that is not installed, so nothing of the
     // user's is configured for it yet.
-    let egress = entry.online.then_some(CloudEgress {
+    let egress = supports::has(&entry.supports, supports::ONLINE).then_some(CloudEgress {
         hosts: entry.allowed_hosts.as_slice(),
         user_url: false,
     });
     let caps = capability_chips(
-        entry.supports_gpu,
-        entry.supports_cpu,
+        supports::has(&entry.supports, supports::GPU),
+        supports::has(&entry.supports, supports::CPU),
         egress,
         entry_accepts_context(entry),
         entry_clones_voices(entry),

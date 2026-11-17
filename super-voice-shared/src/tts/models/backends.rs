@@ -69,13 +69,13 @@ pub struct BackendInfo {
     pub secrets: Vec<BackendSecret>,
     /// Non-sensitive options stored in the daemon config.
     pub options: Vec<BackendOption>,
-    /// Whether any of this backend's models speaks in a voice the user cloned:
-    /// the sum of the models' [`clones_voices`](BackendModel::clones_voices).
-    ///
-    /// `default` so a payload from a daemon older than the field still
-    /// deserializes, reading as "clones none".
+    /// What the backend can do, as `/backend/list` lists it: `gpu`, `cpu`
+    /// and `online` from its models' devices (`gpu` for the build installed
+    /// here), and `voice_cloning` when a model speaks in voices the user
+    /// cloned. Strings, not a closed set: a client skips an entry it does not
+    /// know. Empty from a daemon older than the field.
     #[serde(default)]
-    pub clones_voices: bool,
+    pub supports: Vec<String>,
 }
 
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

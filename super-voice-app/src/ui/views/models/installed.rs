@@ -17,6 +17,7 @@ use super::chips::{
     update_offer, update_progress_chip,
 };
 use super::surface::{card_divider, card_surface, card_title_block, repo_button};
+use super_voice_registry_types::index::supports;
 
 /// The Library's Installed tab, as its filter toolbar and its cards: every
 /// backend the daemon discovered on disk, one card each. The active backend is
@@ -200,8 +201,8 @@ pub(super) fn installed_card<'a>(
         backend_supports_gpu(backend),
         backend_supports_cpu(backend),
         egress,
-        backend.accepts_context,
-        backend.clones_voices,
+        supports::has(&backend.supports, supports::DICTATION_CONTEXT),
+        supports::has(&backend.supports, supports::VOICE_CLONING),
         // Suppress chip tooltips while this card's overflow menu is open, so the
         // menu paints cleanly on top instead of a tooltip showing half-behind it.
         !menu_open,

@@ -59,7 +59,7 @@ impl SuperTTSDaemon {
                         realtime: m.realtime,
                         clones_voices: m.product.clones_voices(),
                     })
-                    .collect::<Vec<_>>();
+                    .collect();
                 let secrets = b
                     .secrets
                     .iter()
@@ -94,8 +94,15 @@ impl SuperTTSDaemon {
                         }
                     })
                     .collect();
-                // The sum of the models, as the registry index sums them up.
-                let clones_voices = models.iter().any(|m| m.clones_voices);
+                // `"wasm"` is what `installed.json` records for a wasm-kind
+                // backend's asset — correct for that record's own purpose, but
+                // it names a transport, not an accelerator, so it is filtered
+                // before publication (see `BackendInfo::installed_accel`).
+                let installed_accel: Vec<String> = crate::registry::installed::read(&b.dir)
+                    .map_or_default(|r| r.selected.accel)
+                    .into_iter()
+                    .filter(|a| a != "wasm")
+                    .collect();
                 BackendInfo {
                     source: b.source.clone(),
                     name: b.name.clone(),
@@ -109,15 +116,8 @@ impl SuperTTSDaemon {
                     version: crate::tts::tts_models::backends::installed_version(&b.dir)
                         .unwrap_or_else(|| b.version.clone()),
                     kind: b.kind.clone(),
-                    // `"wasm"` is what `installed.json` records for a wasm-kind
-                    // backend's asset — correct for that record's own purpose,
-                    // but it names a transport, not an accelerator, so it is
-                    // filtered before publication (see `BackendInfo::installed_accel`).
-                    installed_accel: crate::registry::installed::read(&b.dir)
-                        .map_or_default(|r| r.selected.accel)
-                        .into_iter()
-                        .filter(|a| a != "wasm")
-                        .collect(),
+                    supports: crate::backend_supports::supports(b, &installed_accel),
+                    installed_accel,
                     // The manifest's declared egress, and only that. A user-set
                     // `base_url` authorizes an endpoint beyond it, but it is the
                     // user's own value and does not belong in a field clients
@@ -127,7 +127,6 @@ impl SuperTTSDaemon {
                     models,
                     secrets,
                     options,
-                    clones_voices,
                 }
             })
             .collect();

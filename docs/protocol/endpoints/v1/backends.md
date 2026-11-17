@@ -67,8 +67,7 @@ Authorization: Bearer …64hex…
       "kind":   "wasm",                 // "wasm" | "subprocess"
       "allowed_hosts": ["api.openai.com"],  // hosts the manifest declares; [] for subprocess/local
       "installed_accel": [],            // accel of the installed asset; [] for a wasm/cloud backend
-      "accepts_context": true,          // any of its models takes the dictation context
-      "clones_voices": false,           // any of its models speaks in cloned voices
+      "supports": ["online", "dictation_context"],  // what its models can do
       "models": [
         {
           "name":                 "whisper-1",
@@ -122,8 +121,7 @@ Authorization: Bearer …64hex…
 | `…[].options`     | array            | Declared options: `{ name, label, description, type, default, required, value }`. `label` falls back to `name` when absent; `value` is the effective value (config override if set, else `default`). |
 | `…[].models[].accepts_context` | bool | Whether the model is handed the user's [dictation context](./context.md) as `x-voice-prompt` / `x-voice-vocabulary`: a speech-to-text model declaring [`accepts_context = true`](../../backend/config.md#models), or one of a backend still declaring the deprecated `[capabilities] context = true`. Always `false` for a synthesis model. `false` from a daemon older than the field. A settings UI needs this to say which models will actually use a context: one that ignores the headers has no way to say so at runtime, so without it the user cannot tell a context that did nothing from one that is not working. |
 | `…[].models[].clones_voices` | bool | Whether the model speaks in the voices the user [cloned](./tts/voice.md): a synthesis model with `cloned` in its [`voice_kinds`](../../backend/config.md#models). `false` for every other model, and from a daemon older than the field. |
-| `…[].clones_voices` | bool           | Whether any of the backend's models speaks in cloned voices: the sum of `models[].clones_voices`, as the [registry listing](./registry/backends.md) sums it up on its entry. `false` from a daemon older than the field. |
-| `…[].accepts_context` | bool         | Whether any of the backend's models takes a context: the sum of `models[].accepts_context`, as the [registry listing](./registry/backends.md) sums it up on its entry. `false` from a daemon older than the field, which is the same thing in effect, since such a daemon sends the headers to nobody. |
+| `…[].supports`    | array of string  | What the backend can do, with the names the [registry listing](./registry/backends.md) uses on its entries: `gpu`, `cpu` and `online` from its models' devices, `dictation_context` when a model takes a context, `voice_cloning` when a model speaks in cloned voices. `gpu` is about the build installed here: a backend whose install has only its CPU build does not list it, whatever its manifest says. Read it as strings and skip an entry you do not know. Empty from a daemon older than the field. |
 
 `models[].role` says what a model is for, and so which feature it serves:
 `"transcription"` and `"post_processor"` are speech to text's, `"synthesis"`

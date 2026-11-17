@@ -584,7 +584,7 @@ async fn the_catalog_lists_both_features_backends() {
     assert_eq!(stage[0]["source"], stt);
 }
 
-/// Both catalogs say which models speak in cloned voices, and sum it up on the
+/// Both catalogs say which models speak in cloned voices, and list it on the
 /// backend: `/backend/list`, and text to speech's own, which the picker of its
 /// stage reads. A backend serving both features clones with its synthesis
 /// model only.
@@ -612,7 +612,11 @@ async fn the_catalogs_say_which_models_clone_voices() {
         .expect("catalog");
     assert_eq!(cat[0]["models"][0]["clones_voices"], false, "{cat}");
     assert_eq!(cat[0]["models"][1]["clones_voices"], true, "{cat}");
-    assert_eq!(cat[0]["clones_voices"], true, "{cat}");
+    assert_eq!(
+        cat[0]["supports"],
+        serde_json::json!(["online", "voice_cloning"]),
+        "{cat}"
+    );
 
     let tts = daemon
         .tts
@@ -622,7 +626,11 @@ async fn the_catalogs_say_which_models_clone_voices() {
         .expect("catalog");
     assert_eq!(tts[0]["models"][0]["name"], "tts-1", "{tts}");
     assert_eq!(tts[0]["models"][0]["clones_voices"], true, "{tts}");
-    assert_eq!(tts[0]["clones_voices"], true, "{tts}");
+    assert_eq!(
+        tts[0]["supports"],
+        serde_json::json!(["online", "voice_cloning"]),
+        "{tts}"
+    );
 }
 
 /// `handle_list_backends` builds the catalog JSON (models, secrets,

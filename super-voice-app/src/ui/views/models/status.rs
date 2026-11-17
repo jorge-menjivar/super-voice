@@ -72,8 +72,7 @@ mod unmet_requirements_tests {
             }],
             secrets,
             options,
-            accepts_context: false,
-            clones_voices: false,
+            supports: Vec::new(),
         }
     }
 
@@ -401,8 +400,7 @@ mod model_status_tests {
                 required: true,
             }],
             options: Vec::new(),
-            accepts_context: false,
-            clones_voices: false,
+            supports: Vec::new(),
         }
     }
 
