@@ -645,7 +645,7 @@ registry-phase-finishing = finalisation
 # Sleep when idle
 memory = Mémoire
 sleep-when-idle = Mise en veille si inactif
-sleep-when-idle-description = Libère la mémoire d’un modèle resté inutilisé un certain temps. Il est rechargé au prochain enregistrement ou à la prochaine lecture, qui attend son chargement.
+sleep-when-idle-description = Libère la mémoire d’un modèle resté inutilisé un certain temps. Il est rechargé à sa prochaine utilisation.
 sleep-after = Mise en veille après
 models-sleep-after = Les modèles se mettent en veille après { $time } d’inactivité
 idle-minutes = { $minutes ->

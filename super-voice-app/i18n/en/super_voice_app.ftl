@@ -645,7 +645,7 @@ registry-phase-finishing = finishing
 # Sleep when idle
 memory = Memory
 sleep-when-idle = Sleep When Idle
-sleep-when-idle-description = Free a model's memory when it has not been used for a while. It loads again on the next recording or speech, which waits for it.
+sleep-when-idle-description = Free a model's memory when it has not been used for a while. It loads again when it is next used.
 sleep-after = Sleep After
 models-sleep-after = Models sleep after { $time } idle
 idle-minutes = { $minutes ->

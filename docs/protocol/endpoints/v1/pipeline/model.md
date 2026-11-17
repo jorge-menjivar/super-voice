@@ -61,8 +61,8 @@ time. `loaded` is what says whether it is up. Both stages answer this way; stage
 | `idle`       | out of memory, and the next request that needs it loads it: [idle unload](../settings/idle_unload.md) is on, and the stage is on with a model selected. What an idle unload leaves. |
 | `not_loaded` | out of memory, and nothing loads it until a [load](#post-sttpipelinestagemodel): no model is selected, the stage is switched off, or idle unload is off. |
 
-A client shows an `idle` stage as ready: a recording waits for its load, and
-nothing else differs.
+A client shows an `idle` stage as ready: a recording starts capturing at once
+while the model loads, and only its transcript can wait for the load.
 
 An empty slot reports `null` rather than omitting the keys:
 
