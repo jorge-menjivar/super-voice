@@ -93,7 +93,7 @@ jobs:
           fi
 
       - if: steps.release.outputs.published == 'true'
-        uses: super-libre/super-engine/.github/actions/install-e2e@c3bc35d98fbb28a786587ea5c24c5d84c96cc86e
+        uses: super-libre/super-engine/.github/actions/install-e2e@bc924d266375aab9f0d1520b00696a358421e8d1
         with:
           slug: super-voice
           short-name: voice

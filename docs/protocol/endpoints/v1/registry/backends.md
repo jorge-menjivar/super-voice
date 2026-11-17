@@ -53,6 +53,7 @@ GET /registry/backend/list?include_incompatible=false&kind=wasm&online=true&q=op
       "online": false,
       "supports_gpu": true,
       "supports_cpu": true,
+      "accepts_context": false,
       "models": [
         { "name": "voxtral-mini", "provider": "",
           "supported_devices": ["cpu", "gpu"],
@@ -109,6 +110,12 @@ the daemon hands it the user's
 [dictation context](../../../backend/contract.md#request-headers). It is `false`
 for every other model, including a synthesis model of the same backend, and for
 every model of an index published before the field existed.
+
+`accepts_context` on the entry sums up its models: `true` when any of them
+takes a context, so a client can tell from the entry alone, the way
+`supports_gpu` and `supports_cpu` sum up their devices. It is worked out from
+the models, never declared, and `false` on an index published before the
+field existed.
 
 Per-entry fields beyond what `index.json` carries:
 

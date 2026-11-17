@@ -537,6 +537,41 @@ fn the_index_says_which_models_take_a_context() {
     }
 }
 
+/// An entry says a backend takes a context when any of its models does, so a
+/// client reads it off the entry without walking the models.
+#[test]
+fn the_index_entry_sums_up_whether_a_backend_takes_a_context() {
+    let indexed = |accepts: &[bool]| -> Vec<IndexModel> {
+        accepts
+            .iter()
+            .map(|&accepts_context| IndexModel {
+                name: "m".to_string(),
+                provider: String::new(),
+                supported_devices: vec!["cpu".to_string()],
+                product: super::VoiceIndexModel {
+                    role: "transcription".to_string(),
+                    accepts_context,
+                },
+            })
+            .collect()
+    };
+    assert!(!Voice::index_backend(&indexed(&[])).accepts_context);
+    assert!(!Voice::index_backend(&indexed(&[false, false])).accepts_context);
+    assert!(Voice::index_backend(&indexed(&[false, true])).accepts_context);
+
+    let entry: crate::index::IndexBackend = serde_json::from_value(serde_json::json!({
+        "id": "y", "source": "github.com/x/y", "version": "1.0.0", "tag": "v1.0.0",
+        "name": "Y", "kind": "wasm", "contract": "v1", "entrypoint": "y.wasm",
+        "online": false, "supports_gpu": false, "supports_cpu": true,
+        "models": [], "secrets": [], "options": [], "assets": {}
+    }))
+    .expect("an entry from before the field parses");
+    assert!(
+        !entry.product.accepts_context,
+        "an index from before the field reads as taking no context"
+    );
+}
+
 /// One backend can serve both features.
 #[test]
 fn one_backend_holds_models_of_both_features() {

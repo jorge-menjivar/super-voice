@@ -12,6 +12,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use super_engine_protocol::ProductSpec;
+use super_engine_spec::index::IndexModel;
 use super_engine_spec::manifest::{ContractField, FieldRule, Manifest, ManifestError, ModelEntry};
 pub use super_engine_spec::product::{Generation, Product};
 use super_engine_spec::product::{SchemaNames, generation_from_str};
@@ -448,6 +449,20 @@ pub struct VoiceIndexModel {
     pub accepts_context: bool,
 }
 
+/// The backend-level fields Super Voice's index carries beside `online`,
+/// `supports_gpu` and `supports_cpu`: what the backend's models can do, summed
+/// up from their [`VoiceIndexModel`]s, so a client reads it off the entry
+/// without walking the models.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct VoiceIndexBackend {
+    /// Whether any of the backend's models takes the user's dictation context
+    /// ([`VoiceIndexModel::accepts_context`]). An index published before the
+    /// field existed has none, and is read as `false`.
+    #[serde(default)]
+    pub accepts_context: bool,
+}
+
 /// The index's role when an entry has none: [`ModelRole`]'s default, spelled,
 /// so the two cannot drift.
 fn default_role() -> String {
@@ -535,6 +550,7 @@ impl Product for Voice {
     type Capabilities = VoiceCapabilities;
     type Model = VoiceModel;
     type IndexModel = VoiceIndexModel;
+    type IndexBackend = VoiceIndexBackend;
 
     const SLUG: &'static str = "super-voice";
 
@@ -647,6 +663,12 @@ impl Product for Voice {
         VoiceIndexModel {
             role: role.to_string(),
             accepts_context: capabilities.context && role != ModelRole::Synthesis,
+        }
+    }
+
+    fn index_backend(models: &[IndexModel<VoiceIndexModel>]) -> VoiceIndexBackend {
+        VoiceIndexBackend {
+            accepts_context: models.iter().any(|m| m.product.accepts_context),
         }
     }
 }

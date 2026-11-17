@@ -199,11 +199,11 @@ pub(super) fn stage_chips(
 }
 
 /// Whether a backend in the catalog takes the user's dictation context, which
-/// earns its card the Contexts chip. The index says it on each speech-to-text
-/// model of a backend that declared it. An index or a daemon from before the
-/// field says nothing, and reads as no.
+/// earns its card the Contexts chip. The index sums it up on the entry from its
+/// models. An index or a daemon from before the field says nothing, and reads
+/// as no.
 pub(super) fn entry_accepts_context(entry: &super_voice_shared::registry::RegistryBackend) -> bool {
-    entry.models.iter().any(|m| m.product.accepts_context)
+    entry.product.accepts_context
 }
 
 /// Whether a stage's backend is handed the user's dictation context, which
@@ -1160,6 +1160,7 @@ mod update_offer_tests {
             online: true,
             supports_gpu: false,
             supports_cpu: false,
+            product: super_voice_registry_types::index::VoiceIndexBackend::default(),
             models: Vec::new(),
             secrets: Vec::new(),
             options: Vec::new(),
@@ -1176,26 +1177,14 @@ mod update_offer_tests {
         }
     }
 
-    /// A catalog entry gets the Contexts chip when the index marks any of its
-    /// models as taking a context, and not when none is, which is also how an
-    /// index from before the field reads.
+    /// A catalog entry gets the Contexts chip from what the index sums up on
+    /// it, and not without, which is also how an index from before the field
+    /// reads.
     #[test]
-    fn a_catalog_entry_takes_a_context_when_a_model_does() {
-        let model =
-            |role: &str, accepts_context: bool| super_voice_shared::registry::RegistryModel {
-                name: "m".to_string(),
-                provider: String::new(),
-                supported_devices: vec!["cpu".to_string()],
-                product: super_voice_registry_types::index::VoiceIndexModel {
-                    role: role.to_string(),
-                    accepts_context,
-                },
-            };
+    fn a_catalog_entry_takes_a_context_when_the_index_says_so() {
         let mut e = entry(None, "1.0.0");
         assert!(!entry_accepts_context(&e));
-        e.models = vec![model("synthesis", false), model("post_processor", false)];
-        assert!(!entry_accepts_context(&e));
-        e.models.push(model("transcription", true));
+        e.product.accepts_context = true;
         assert!(entry_accepts_context(&e));
     }
 
