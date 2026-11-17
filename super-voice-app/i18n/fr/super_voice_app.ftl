@@ -641,11 +641,12 @@ registry-phase-extracting = extraction
 registry-phase-installing = installation
 registry-phase-finishing = finalisation
 
-# Idle unload
+# Sleep when idle
 memory = Mémoire
-unload-idle-models = Décharger les modèles inactifs
-unload-idle-models-description = Libère la mémoire d’un modèle resté inutilisé un certain temps. Il est rechargé au prochain enregistrement ou à la prochaine lecture, qui attend son chargement.
-unload-after = Décharger après
+sleep-when-idle = Mise en veille si inactif
+sleep-when-idle-description = Libère la mémoire d’un modèle resté inutilisé un certain temps. Il est rechargé au prochain enregistrement ou à la prochaine lecture, qui attend son chargement.
+sleep-after = Mise en veille après
+models-sleep-after = Les modèles se mettent en veille après { $time } d’inactivité
 idle-minutes = { $minutes ->
         [one] { $minutes } minute
        *[other] { $minutes } minutes

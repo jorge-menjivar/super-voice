@@ -641,11 +641,12 @@ registry-phase-extracting = extracting
 registry-phase-installing = installing
 registry-phase-finishing = finishing
 
-# Idle unload
+# Sleep when idle
 memory = Memory
-unload-idle-models = Unload Idle Models
-unload-idle-models-description = Free a model's memory when it has not been used for a while. It loads again on the next recording or speech, which waits for it.
-unload-after = Unload After
+sleep-when-idle = Sleep When Idle
+sleep-when-idle-description = Free a model's memory when it has not been used for a while. It loads again on the next recording or speech, which waits for it.
+sleep-after = Sleep After
+models-sleep-after = Models sleep after { $time } idle
 idle-minutes = { $minutes ->
         [one] { $minutes } minute
        *[other] { $minutes } minutes

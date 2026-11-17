@@ -101,8 +101,11 @@ pub(crate) fn pill_label_tinted<'a>(
 /// The surface stays neutral, since a tinted pill reads as a button. Speech to
 /// text's pill follows transcription, the stage that has to run for dictation
 /// to type anything; text to speech's follows synthesis.
+///
+/// With Sleep When Idle on, a moon follows them, since their dots stay green
+/// while a model sleeps. Its tooltip says after how long.
 pub(crate) fn feature_status_pills(app: &AppModel) -> Element<'_, Message> {
-    row![
+    let mut pills = row![
         feature_pill(
             icons::MICROPHONE,
             &crate::fl!("speech-to-text"),
@@ -115,8 +118,21 @@ pub(crate) fn feature_status_pills(app: &AppModel) -> Element<'_, Message> {
         ),
     ]
     .spacing(6.0)
-    .align_y(Alignment::Center)
-    .into()
+    .align_y(Alignment::Center);
+    if app.idle_unload_secs > 0 {
+        pills = pills.push(sleep_pill(app.idle_unload_secs));
+    }
+    pills.into()
+}
+
+/// The moon that says models sleep when idle, after `after_secs`.
+fn sleep_pill<'a>(after_secs: u64) -> Element<'a, Message> {
+    let time = crate::ui::views::customization::idle_time_name(after_secs);
+    surface::rounded_tooltip(
+        header_pill(icons::phosphor(icons::MOON).size(14)),
+        text::body(crate::fl!("models-sleep-after", time = time)),
+        widget::tooltip::Position::Bottom,
+    )
 }
 
 fn feature_pill<'a>(

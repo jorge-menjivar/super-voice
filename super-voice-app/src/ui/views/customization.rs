@@ -160,13 +160,14 @@ fn notifications_section(notification_method: NotificationMethod) -> Element<'st
         .into()
 }
 
-/// Memory section: whether a model is unloaded when unused, and after how
-/// long. One setting for both features' models.
+/// Memory section: whether a model sleeps when unused (is unloaded, and loads
+/// again on its next use), and after how long. One setting for both features'
+/// models.
 fn memory_section(idle_unload_secs: u64) -> Element<'static, Message> {
     let enabled = idle_unload_secs > 0;
     let mut section = settings::section().title(crate::fl!("memory")).add(
-        settings::item::builder(crate::fl!("unload-idle-models"))
-            .description(crate::fl!("unload-idle-models-description"))
+        settings::item::builder(crate::fl!("sleep-when-idle"))
+            .description(crate::fl!("sleep-when-idle-description"))
             .control(cosmic::widget::toggler(enabled).on_toggle(|on| {
                 Message::IdleUnload(IdleUnloadMessage::Changed(if on {
                     IDLE_UNLOAD_CHOICES[0]
@@ -186,7 +187,7 @@ fn memory_section(idle_unload_secs: u64) -> Element<'static, Message> {
         choices.sort_unstable();
         let names: Vec<String> = choices.iter().map(|secs| idle_time_name(*secs)).collect();
         let selected = choices.iter().position(|secs| *secs == idle_unload_secs);
-        section = section.add(settings::item::builder(crate::fl!("unload-after")).control(
+        section = section.add(settings::item::builder(crate::fl!("sleep-after")).control(
             widget::dropdown(names, selected, move |index| {
                 Message::IdleUnload(IdleUnloadMessage::Changed(choices[index]))
             }),
@@ -198,7 +199,7 @@ fn memory_section(idle_unload_secs: u64) -> Element<'static, Message> {
 
 /// An idle time as the dropdown shows it: whole minutes when it is one, else
 /// seconds.
-fn idle_time_name(secs: u64) -> String {
+pub(crate) fn idle_time_name(secs: u64) -> String {
     if secs.is_multiple_of(60) {
         let minutes = secs / 60;
         crate::fl!("idle-minutes", minutes = minutes)
