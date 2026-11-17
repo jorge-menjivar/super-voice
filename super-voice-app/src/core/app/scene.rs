@@ -122,17 +122,15 @@ const SCENES: &[(&str, Scene)] = &[
             ..Scene::page(Page::Library, Stt::Running)
         },
     ),
-    ("recording", Scene::page(Page::Recording, Stt::Running)),
-    (
-        "input-simulation",
-        Scene::page(Page::InputSimulation, Stt::Running),
-    ),
     ("contexts", Scene::page(Page::Contexts, Stt::Running)),
     (
         "contexts/edit",
         Scene::click(Page::Contexts, Target::EditContext, Stt::Running),
     ),
-    ("speech", Scene::page(Page::Speech, Stt::Running)),
+    (
+        "speech-to-text-behavior",
+        Scene::page(Page::SpeechToTextBehavior, Stt::Running),
+    ),
     ("voices", Scene::page(Page::Voices, Stt::Running)),
     // Nothing on these depends on speech to text, so it is left as found.
     (
@@ -143,16 +141,13 @@ const SCENES: &[(&str, Scene)] = &[
         },
     ),
     (
-        "read-aloud",
+        "text-to-speech-behavior",
         Scene {
             stt: None,
-            ..Scene::page(Page::ReadAloud, Stt::Running)
+            ..Scene::page(Page::TextToSpeechBehavior, Stt::Running)
         },
     ),
-    (
-        "customization",
-        Scene::page(Page::Customization, Stt::Running),
-    ),
+    ("settings", Scene::page(Page::Customization, Stt::Running)),
     ("connection", Scene::page(Page::Connection, Stt::Running)),
     ("updates", Scene::page(Page::Updates, Stt::Running)),
     // No shot: what `just screenshots` reads first, and how it puts speech to

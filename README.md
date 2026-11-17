@@ -49,8 +49,8 @@ Under the hood it's two things:
 Open **Super Voice** from your app launcher. Everything starts there:
 
 1. **Models:** pick a model for speech to text and one for text to speech, or install one from **Library → Browse**.
-2. **Speech to text → Recording:** press **Test Recording**, speak, and the transcription appears in the app.
-3. **Text to speech → Speech:** type something and press **Speak** to hear it.
+2. **Speech to text → Behavior:** press **Test Recording**, speak, and the transcription appears in the app.
+3. **Text to speech → Behavior:** type something and press **Speak** to hear it.
 4. **Text to speech → Voices:** record or import a sample to clone your own voice.
 5. **Speech to text → Contexts:** say what you're dictating and list the words it should get right, like names and product terms.
 
@@ -64,7 +64,7 @@ Press **Super+Space**, speak, and your words are typed into whatever app is focu
 
 ### Read text aloud
 
-Select text in any app and press **Super+Shift+Space** to hear it read aloud with your text to speech model. Press it again to stop. To read what you copy instead, set **Read from** to **Clipboard** in **Text to speech → Read aloud**. Add it from the app's **Shortcuts** page, on COSMIC or on a desktop with the GlobalShortcuts portal, such as KDE Plasma, GNOME or Hyprland. On any other, such as Sway, the page shows the command to bind yourself: `voice speak --read`.
+Select text in any app and press **Super+Shift+Space** to hear it read aloud with your text to speech model. Press it again to stop. To read what you copy instead, set **Read from** to **Clipboard** in **Text to speech → Behavior**. Add it from the app's **Shortcuts** page, on COSMIC or on a desktop with the GlobalShortcuts portal, such as KDE Plasma, GNOME or Hyprland. On any other, such as Sway, the page shows the command to bind yourself: `voice speak --read`.
 
 It reads the text through Wayland's data-control protocol, so the compositor must offer it. COSMIC, KDE Plasma and wlroots compositors such as Sway and Hyprland do. GNOME does not.
 
@@ -93,7 +93,7 @@ Models come from a **library** of backends you install on demand. Open the app, 
 
 ### Free a model's memory when idle
 
-By default a selected model stays loaded, so every request is answered at once. To keep it in memory only while you use it, turn on **Customization → Memory → Unload Idle Models** in the app and pick how long a model may sit unused.
+By default a selected model stays loaded, so every request is answered at once. To keep it in memory only while you use it, turn on **Settings → Memory → Sleep When Idle** in the app and pick how long a model may sit unused.
 
 The speech-to-text and text-to-speech models are then unloaded after that long without use, and loaded again by the next recording or `voice speak`, which waits for the load. Unloading a model yourself still switches it off until you load it again.
 

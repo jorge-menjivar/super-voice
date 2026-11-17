@@ -51,9 +51,9 @@ fn build_nav() -> nav_bar::Model {
         .icon(icons::phosphor(icons::KEYBOARD))
         .divider_above(true);
 
-    // Shortcuts opens the group on Linux; Customization does elsewhere.
+    // Shortcuts opens the group on Linux; Settings does elsewhere.
     nav.insert()
-        .text(crate::fl!("customization"))
+        .text(crate::fl!("settings"))
         .data::<Section>(Section::Customization)
         .icon(icons::phosphor(icons::GEAR))
         .divider_above(!cfg!(target_os = "linux"));
@@ -150,8 +150,8 @@ impl AppModel {
             post_processor: crate::daemon::client::StageState::default(),
             synthesis: crate::daemon::client::StageState::default(),
             voice: crate::state::VoiceState::default(),
-            speech_to_text_tab: crate::state::Page::Recording,
-            text_to_speech_tab: crate::state::Page::Speech,
+            speech_to_text_tab: crate::state::Page::Contexts,
+            text_to_speech_tab: crate::state::Page::Voices,
             window_width: 0.0,
             speech: crate::state::SpeechState::default(),
             voices: crate::state::voices::VoicesState::default(),

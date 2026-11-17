@@ -62,7 +62,7 @@ impl AppModel {
                 self.handle_model_language_messages(per_model)
             }
             LanguageMessage::LanguageError(e) => {
-                // The language picker lives on the Customization page — surface
+                // The language picker lives on the Settings page — surface
                 // the failure on that page's banner instead of only logging it
                 // (Tier 3 #11).
                 log::warn!("Language settings error: {e}");
@@ -184,7 +184,7 @@ impl AppModel {
         // An idle stage has no model to ask about. Callers report "nothing
         // loaded" as an empty pair rather than an absent one, so without this a
         // daemon that comes up idle answers `400 invalid_backend` and the
-        // Customization page shows "Couldn't update language" for a language
+        // Settings page shows "Couldn't update language" for a language
         // nobody touched.
         if model.is_empty() || source.is_empty() {
             return Task::none();

@@ -248,43 +248,18 @@ impl AppModel {
                 self.idle_unload_secs,
                 self.action_error_for(crate::state::ErrorScope::Customization),
             ),
-            Page::Recording => views::recording::page(
-                self.recording_stop_mode,
-                self.preview_typing_enabled,
-                &self.recording_status,
-                &self.transcription_text,
-                &self.preview_text,
-                self.preview_source,
-                self.audio_level,
-                self.is_speech_detected,
-                self.action_error_for(crate::state::ErrorScope::Recording),
-            ),
-            Page::InputSimulation => views::input_simulation::page(
-                self.write_method,
-                &self.write_method_test_text,
-                self.resolved_write_method,
-                self.write_method_test_countdown,
-                self.action_error_for(crate::state::ErrorScope::InputSimulation),
-            ),
+            Page::SpeechToTextBehavior => views::behavior::speech_to_text(self),
             Page::Models => views::models::page(self),
             Page::Library => views::models::library_page(self),
             Page::Contexts => views::contexts::page(self),
             Page::Updates => views::updates::page(&self.update),
             Page::Connection => views::connection::page(self),
-            Page::Speech => views::speech::page(
-                &self.speech,
-                self.action_error_for(crate::state::ErrorScope::Speech),
-            ),
             Page::Shortcuts => views::shortcuts::page(
                 &self.shortcuts,
                 self.action_error_for(crate::state::ErrorScope::Shortcuts),
             ),
-            Page::ReadAloud => views::read_aloud::page(
-                self.read_method,
-                &self.speech.status,
-                self.action_error_for(crate::state::ErrorScope::ReadAloud),
-            ),
             Page::Voices => views::voices::page(self),
+            Page::TextToSpeechBehavior => views::behavior::text_to_speech(self),
         }
     }
 }

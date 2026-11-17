@@ -35,8 +35,9 @@ pub enum RecordingStatus {
 pub enum Page {
     Connection,
     Customization,
-    Recording,
-    InputSimulation,
+    /// Speech to text's settings, and one section that tests them: when a
+    /// recording stops, preview typing, how text is typed.
+    SpeechToTextBehavior,
     /// The active transcription backend: its model picker, load/unload, and a
     /// side sheet for switching which installed backend is active.
     Models,
@@ -50,14 +51,12 @@ pub enum Page {
     /// Named dictation contexts: what the user is dictating, as a prompt and a
     /// vocabulary, and which one is in force.
     Contexts,
-    /// A test utterance, and what the daemon is saying.
-    Speech,
     /// The cloned-voice library: record or import a reference clip, and manage
     /// the voices built from them.
     Voices,
-    /// Reading text on the screen aloud: where the shortcut reads from, and a
-    /// test that reads it now.
-    ReadAloud,
+    /// Text to speech's settings, and one section that tests them: where the
+    /// read-aloud shortcut reads from, a test utterance, a read test.
+    TextToSpeechBehavior,
     /// Super Voice's keyboard shortcuts, and adding each one that is missing.
     Shortcuts,
 }
@@ -86,7 +85,7 @@ impl Section {
             Self::Shortcuts => crate::fl!("shortcuts"),
             Self::Models => crate::fl!("models"),
             Self::Library => crate::fl!("library"),
-            Self::Customization => crate::fl!("customization"),
+            Self::Customization => crate::fl!("settings"),
             Self::Connection => crate::fl!("connection"),
             Self::Updates => crate::fl!("updates"),
         }
@@ -98,12 +97,9 @@ impl Section {
         match self {
             Self::Models => &[Page::Models],
             Self::Library => &[Page::Library],
-            Self::SpeechToText => &[Page::Recording, Page::InputSimulation, Page::Contexts],
-            // Reading aloud reads the Wayland session, so only Linux has it.
-            Self::TextToSpeech if cfg!(target_os = "linux") => {
-                &[Page::Speech, Page::Voices, Page::ReadAloud]
-            }
-            Self::TextToSpeech => &[Page::Speech, Page::Voices],
+            // Behavior is each feature's last tab: its settings and tests.
+            Self::SpeechToText => &[Page::Contexts, Page::SpeechToTextBehavior],
+            Self::TextToSpeech => &[Page::Voices, Page::TextToSpeechBehavior],
             Self::Shortcuts => &[Page::Shortcuts],
             Self::Customization => &[Page::Customization],
             Self::Connection => &[Page::Connection],
@@ -117,8 +113,8 @@ impl Section {
         match page {
             Page::Models => Self::Models,
             Page::Library => Self::Library,
-            Page::Recording | Page::InputSimulation | Page::Contexts => Self::SpeechToText,
-            Page::Speech | Page::Voices | Page::ReadAloud => Self::TextToSpeech,
+            Page::Contexts | Page::SpeechToTextBehavior => Self::SpeechToText,
+            Page::Voices | Page::TextToSpeechBehavior => Self::TextToSpeech,
             Page::Shortcuts => Self::Shortcuts,
             Page::Customization => Self::Customization,
             Page::Connection => Self::Connection,
@@ -134,14 +130,11 @@ impl Page {
         match self {
             Self::Models => crate::fl!("models"),
             Self::Library => crate::fl!("library"),
-            Self::Recording => crate::fl!("recording"),
-            Self::InputSimulation => crate::fl!("input-simulation"),
             Self::Contexts => crate::fl!("contexts"),
-            Self::Speech => crate::fl!("speech-page"),
             Self::Voices => crate::fl!("voices"),
-            Self::ReadAloud => crate::fl!("read-aloud-page"),
+            Self::SpeechToTextBehavior | Self::TextToSpeechBehavior => crate::fl!("behavior"),
             Self::Shortcuts => crate::fl!("shortcuts"),
-            Self::Customization => crate::fl!("customization"),
+            Self::Customization => crate::fl!("settings"),
             Self::Connection => crate::fl!("connection"),
             Self::Updates => crate::fl!("updates"),
         }
@@ -284,8 +277,8 @@ mod section_tests {
                 seen.push(page);
             }
         }
-        // Read aloud is Linux only.
-        let pages = if cfg!(target_os = "linux") { 12 } else { 11 };
-        assert_eq!(seen.len(), pages, "every page is in a section");
+        // The same pages everywhere: text to speech's Behavior tab leaves out
+        // reading aloud where the session has none, rather than a tab going.
+        assert_eq!(seen.len(), 10, "every page is in a section");
     }
 }
