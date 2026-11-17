@@ -148,6 +148,7 @@ names-jargon-anything-the-model-keeps-mishearing = Names, jargon, anything the m
 native-subprocess = Native subprocess
 needs = Needs
 needs-a-newer-super-voice = Needs a newer Super Voice
+never = Never
 new-context = New context
 new-recording = New recording
 new-voice = New voice

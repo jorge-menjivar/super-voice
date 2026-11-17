@@ -89,9 +89,10 @@ fn version_section(state: &UpdateState) -> Element<'_, Message> {
     let latest = status
         .and_then(|s| s.latest_version.as_deref())
         .unwrap_or("—");
-    let checked_at = status
-        .and_then(|s| s.checked_at.as_deref())
-        .unwrap_or("never");
+    let checked_at = status.and_then(|s| s.checked_at.as_deref()).map_or_else(
+        || crate::fl!("never"),
+        |at| checked_at_label(at, &chrono::Local),
+    );
 
     let mut checked_item = settings::item::builder(crate::fl!("last-checked"));
     if let Some(err) = status.and_then(|s| s.last_check_error.as_deref()) {
@@ -113,9 +114,23 @@ fn version_section(state: &UpdateState) -> Element<'_, Message> {
             settings::item::builder(crate::fl!("latest-version"))
                 .control(text::body(latest.to_string())),
         )
-        .add(checked_item.control(text::body(checked_at.to_string())))
+        .add(checked_item.control(text::body(checked_at)))
         .add(settings::item::builder(crate::fl!("check-for-updates")).control(check_button))
         .into()
+}
+
+/// When the last check ran, to the minute, in `zone`: the app passes the
+/// viewer's own. The daemon reports it as RFC 3339 UTC to the nanosecond,
+/// which is how it reached the page before. A time it cannot parse is shown as
+/// it came, rather than as nothing.
+fn checked_at_label<Tz: chrono::TimeZone>(rfc3339: &str, zone: &Tz) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    chrono::DateTime::parse_from_rfc3339(rfc3339).map_or_else(
+        |_| rfc3339.to_string(),
+        |at| at.with_timezone(zone).format("%Y-%m-%d %H:%M").to_string(),
+    )
 }
 
 /// Automatic Updates section: whether the daemon checks daily, and whether
@@ -341,7 +356,28 @@ pub(crate) fn header_badge(app: &AppModel) -> Option<Element<'_, Message>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{curl_fallback_caption, manual_install_caption, tag_is_prerelease};
+    use super::{
+        checked_at_label, curl_fallback_caption, manual_install_caption, tag_is_prerelease,
+    };
+
+    /// The daemon's timestamp, which the page used to show verbatim.
+    #[test]
+    fn the_last_check_reads_to_the_minute_in_the_viewers_zone() {
+        assert_eq!(
+            checked_at_label("2026-11-17T22:18:38.998834966+00:00", &chrono::Utc),
+            "2026-11-17 22:18"
+        );
+        let east = chrono::FixedOffset::east_opt(2 * 3600).expect("a valid offset");
+        assert_eq!(
+            checked_at_label("2026-11-17T22:18:38Z", &east),
+            "2026-11-18 00:18"
+        );
+    }
+
+    #[test]
+    fn a_last_check_time_that_does_not_parse_is_shown_as_it_came() {
+        assert_eq!(checked_at_label("yesterday", &chrono::Utc), "yesterday");
+    }
 
     #[test]
     fn a_prerelease_tag_carries_the_beta_flag_into_both_captions() {
