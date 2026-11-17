@@ -45,7 +45,6 @@
     # 0.18 is the floor: 0.17's ALSA worker reported a POLLERR and polled
     # again without recovering, which spun the audio thread forever.
     cpal                     = "0.18.2"
-    dashmap                  = "6.1.0"
     dirs                     = "7.0.0"
     # Input simulation (for client)
     #
@@ -72,7 +71,6 @@
       branch           = "fix-shifted-characters-drop",
       default-features = false,
     }
-    env_logger               = "0.11.8"
     futures-util             = "0.3.31"
     # Audio processing
     hound                    = "3.5.1"
