@@ -3841,3 +3841,18 @@ async fn every_settings_write_announces_itself() {
     .collect();
     assert_eq!(announced, expected);
 }
+
+/// When a recording ends every stage's idle time starts again, so a model
+/// sleeps a full idle time after the take, not after the idle loop's last
+/// look during it.
+#[tokio::test]
+async fn the_end_of_a_take_restarts_every_stages_idle_time() {
+    let daemon = test_daemon().await;
+    daemon.model.backdate(Duration::from_secs(60));
+    daemon.post_processor.backdate(Duration::from_secs(60));
+
+    daemon.finished_using_pipeline();
+
+    assert!(daemon.model.idle_for() < Duration::from_secs(5));
+    assert!(daemon.post_processor.idle_for() < Duration::from_secs(5));
+}
