@@ -145,6 +145,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
             log::warn!("Failed to persist config after model voice update: {e}");
         }
         log::info!("Set voice {voice} for {model} ({source})");
+        self.publish_settings_changed("voice");
         self.model_voice_response(&source, &model).await
     }
 
@@ -163,6 +164,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
             log::warn!("Failed to persist config after clearing model voice: {e}");
         }
         log::info!("Cleared the voice for {model} ({source})");
+        self.publish_settings_changed("voice");
         self.model_voice_response(&source, &model).await
     }
 

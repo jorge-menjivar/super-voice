@@ -114,14 +114,16 @@ different act and answers differently.
 
 The new value applies to the next utterance; one already being spoken finishes
 in the voice it started in. Answers with the resolution that results, so a card
-can render its own click without a second read.
+can render its own click without a second read. Other clients hear of it as
+`settings_changed` for `voice` on [`/events`](../../events.md).
 
 ## `DELETE /tts/pipeline/{stage}/model/{model}/voice`
 
 Removes the stored voice, returning the model to its manifest `default_voice`.
 Answers with the same block `GET` does — `source` will be `default`, and
 `effective` will be `null` for a model that declares no default, which is again
-the state where speaking is refused until a voice is chosen.
+the state where speaking is refused until a voice is chosen. Announced as
+`settings_changed` for `voice`, like `POST`.
 
 ## `GET /tts/pipeline/{stage}/model/{model}/voice/list`
 

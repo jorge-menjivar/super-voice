@@ -193,6 +193,13 @@ Content-Type: audio/wav
 Mono 16-bit PCM at 24 kHz — the canonical form, not the bytes that were
 uploaded.
 
+## Telling other clients
+
+Adding, renaming and deleting a voice each publish `settings_changed` for
+`voices` on [`/events`](../events.md), to subscribers holding the
+`daemon_status` scope. It names no voice and carries no audio: a client showing
+the library, or a model's choice of voices drawn from it, reads it again.
+
 ## Speaking in a cloned voice
 
 ```http

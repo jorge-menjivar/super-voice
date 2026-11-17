@@ -2023,6 +2023,9 @@ async fn a_stored_voice_survives_until_it_is_cleared() {
     }];
     backend.models[0].product.default_voice = Some("af_bella".to_string());
     *daemon.backends.write().await = vec![backend];
+    let mut rx = daemon
+        .events
+        .subscribe(crate::tts::daemon::events::Topic::DaemonStatusChanged);
 
     let block = |resp: super_voice_shared::tts::models::protocol::DaemonResponse| {
         resp.voice.expect("a voice block")
@@ -2057,6 +2060,18 @@ async fn a_stored_voice_survives_until_it_is_cleared() {
     );
     assert_eq!(cleared["source"], "default");
     assert!(cleared["override"].is_null());
+
+    // Setting and clearing each announce themselves, so another client's
+    // Synthesis card re-reads the voice; reading does not.
+    let mut announced = Vec::new();
+    while let Ok(Ok((_topic, event))) =
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv_json()).await
+    {
+        if event["status"] == "settings_changed" {
+            announced.push(event["setting"].as_str().unwrap_or_default().to_string());
+        }
+    }
+    assert_eq!(announced, ["voice", "voice"]);
 }
 
 /// A model with no `default_voice` and nothing stored reports no voice at all,

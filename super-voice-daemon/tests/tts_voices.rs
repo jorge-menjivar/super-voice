@@ -327,3 +327,76 @@ async fn a_refused_upload_is_answered_rather_than_reset() {
     assert_eq!(s, StatusCode::FORBIDDEN, "{body}");
     assert_eq!(body["message"], "scope_denied", "{body}");
 }
+
+/// Adding, renaming and deleting a voice each announce `settings_changed` for
+/// `voices`, so another client showing the library — or a model's choice of
+/// voices, which is drawn from it — reads it again. The settings app's
+/// Synthesis card kept saying the model had no voices after another client
+/// added one.
+#[tokio::test]
+async fn library_writes_announce_themselves() {
+    use http_body_util::Empty;
+    let (_guard, p, token) = start_daemon(&["voices", "daemon_status"]).await;
+
+    let stream = UnixStream::connect(&p).await.expect("connect");
+    let io = hyper_util::rt::TokioIo::new(stream);
+    let (mut sender, conn) = handshake::<_, Empty<Bytes>>(io).await.expect("handshake");
+    tokio::spawn(async move {
+        let _ = conn.await;
+    });
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("http://tts.local/v1/events?topics=daemon_status_changed")
+        .header("host", "tts.local")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Empty::<Bytes>::new())
+        .expect("build req");
+    let resp = sender.send_request(req).await.expect("subscribe");
+    assert_eq!(resp.status(), StatusCode::OK);
+    let mut events = resp.into_body();
+    let mut seen = String::new();
+    let mut read_until = async |needle: &str, count: usize| {
+        let read = async {
+            while seen.matches(needle).count() < count {
+                let Some(Ok(frame)) = events.frame().await else {
+                    break;
+                };
+                if let Some(d) = frame.data_ref() {
+                    seen.push_str(&String::from_utf8_lossy(d));
+                }
+            }
+        };
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), read).await;
+        seen.matches(needle).count()
+    };
+    assert_eq!(read_until("event: subscribed", 1).await, 1);
+
+    let announcement = r#""setting":"voices""#;
+    let (status, created) = upload(&p, "/tts/voice?label=Ada", &token, wav(2.0)).await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(read_until(announcement, 1).await, 1, "an added voice");
+
+    let id = created["voice"]["id"].as_str().expect("an id").to_string();
+    let (status, _) = json(
+        &p,
+        Method::PATCH,
+        &format!("/tts/voice/{id}"),
+        &token,
+        Some(serde_json::json!({ "label": "Ada Lovelace" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(read_until(announcement, 2).await, 2, "a renamed voice");
+
+    let (status, _) = json(
+        &p,
+        Method::DELETE,
+        &format!("/tts/voice/{id}"),
+        &token,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(read_until(announcement, 3).await, 3, "a deleted voice");
+    drop(sender);
+}
