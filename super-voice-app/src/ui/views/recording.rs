@@ -110,7 +110,7 @@ pub(super) fn sounds_section<'a>(
         .on_release(Message::Recording(RecordingMessage::VolumeCommit))
         .width(Length::Fill)
         .apply(widget::container)
-        .max_width(250.);
+        .max_width(super::common::LEVEL_METER_WIDTH);
 
         let volume_control = widget::row::with_capacity(3)
             .align_y(Alignment::Center)
@@ -169,9 +169,9 @@ fn live_caption(source: PreviewSource) -> String {
     }
 }
 
-/// The recording test's rows, for the Behavior tab's one Test section: status,
-/// the record button with the audio level, the live preview line, and the
-/// transcript.
+/// The recording test's rows, for the Behavior tab's one Test section: the
+/// status with the button that starts and stops the take, the audio level,
+/// the live preview line, and the transcript.
 pub(super) fn test_rows<'a>(
     recording_status: &'a RecordingStatus,
     transcription_text: &'a str,
@@ -198,13 +198,14 @@ pub(super) fn test_rows<'a>(
             .on_press(Message::Recording(RecordingMessage::StartRecording)),
     };
 
-    let audio_widget = row![
-        record_button,
+    // The button beside the state it changes, and the meter on a line of its
+    // own, where a level reads as a level rather than as part of the button.
+    let status_widget = row![text::body(recording_text), record_button]
+        .align_y(Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_s);
+    let audio_meter =
         widget::determinate_linear(audio_level.max(if audio_level > 0.0 { 0.1 } else { 0.0 }))
-            .width(Length::Fill),
-    ]
-    .align_y(Alignment::Center)
-    .spacing(10);
+            .width(Length::Fixed(super::common::LEVEL_METER_WIDTH));
 
     // One line that keeps changing: the newest incremental text, held to a
     // single row so the section doesn't reflow on every update. The tail is
@@ -246,8 +247,8 @@ pub(super) fn test_rows<'a>(
     };
 
     vec![
-        settings::item(crate::fl!("status"), text::body(recording_text)).into(),
-        settings::flex_item(crate::fl!("audio-level"), audio_widget).into(),
+        settings::item(crate::fl!("status"), status_widget).into(),
+        settings::item(crate::fl!("audio-level"), audio_meter).into(),
         settings::flex_item(crate::fl!("live"), live_widget).into(),
         transcription_widget.into(),
     ]
