@@ -3,7 +3,7 @@
 //! has got, and how to stop it.
 //!
 //! This used to be three records that had to agree: a `busy` flag, the stop
-//! channel, and the reservation of a recording waiting for its model. Each was
+//! channel, and the reservation of a recording not yet capturing. Each was
 //! claimed and cleared in a different place, and they did not agree:
 //!
 //! - The stop channel was installed only once the recorder was built, a second
@@ -36,9 +36,9 @@ pub(crate) struct RecordingState {
 enum Phase {
     #[default]
     Idle,
-    /// Waiting for its model to load, nothing captured yet. `cancel` is taken
-    /// by the stop that cancels it.
-    Waiting {
+    /// Reserved, and starting: not yet holding the microphone. `cancel` is
+    /// taken by the stop that cancels it.
+    Starting {
         id: u64,
         cancel: Option<oneshot::Sender<()>>,
     },
@@ -55,7 +55,7 @@ impl Phase {
     fn id(&self) -> Option<u64> {
         match self {
             Self::Idle => None,
-            Self::Waiting { id, .. } | Self::Active { id, .. } => Some(*id),
+            Self::Starting { id, .. } | Self::Active { id, .. } => Some(*id),
         }
     }
 }
@@ -65,7 +65,7 @@ impl Phase {
 pub(crate) enum Stopped {
     /// There was no recording.
     NothingToStop,
-    /// The recording was waiting for its model, and will not start.
+    /// The recording had not yet taken the microphone, and will not.
     Cancelled,
     /// The recorder was told to stop capturing.
     Signalled,
@@ -75,15 +75,16 @@ pub(crate) enum Stopped {
 }
 
 impl RecordingState {
-    /// Whether a recording is under way: waiting for its model, or holding
-    /// the microphone.
+    /// Whether a recording is under way: starting, or holding the
+    /// microphone.
     pub(crate) fn is_busy(&self) -> bool {
         !matches!(*self.phase(), Phase::Idle)
     }
 
-    /// Whether a recording is waiting for its model to load.
-    pub(crate) fn is_waiting(&self) -> bool {
-        matches!(*self.phase(), Phase::Waiting { .. })
+    /// Whether a recording is starting: reserved, not yet holding the
+    /// microphone.
+    pub(crate) fn is_starting(&self) -> bool {
+        matches!(*self.phase(), Phase::Starting { .. })
     }
 
     /// Whether a recording holds the microphone and its take is being
@@ -95,9 +96,9 @@ impl RecordingState {
     /// Reserve the microphone for a new recording. `None` when one is under
     /// way: one at a time.
     ///
-    /// The recording starts out waiting, which its model may make it do; it
-    /// takes the microphone with [`Claim::start`]. The receiver resolves when
-    /// a stop cancels it before then.
+    /// The recording starts out starting; it takes the microphone with
+    /// [`Claim::start`]. The receiver resolves when a stop cancels it before
+    /// then.
     pub(crate) fn reserve(&self) -> Option<(Claim<'_>, oneshot::Receiver<()>)> {
         let mut phase = self.phase();
         if !matches!(*phase, Phase::Idle) {
@@ -105,24 +106,24 @@ impl RecordingState {
         }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (cancel, cancelled) = oneshot::channel();
-        *phase = Phase::Waiting {
+        *phase = Phase::Starting {
             id,
             cancel: Some(cancel),
         };
         Some((Claim { state: self, id }, cancelled))
     }
 
-    /// Stop the recording: cancel one waiting for its model, or tell the
-    /// recorder of one capturing to stop.
+    /// Stop the recording: cancel one starting, or tell the recorder of one
+    /// capturing to stop.
     pub(crate) fn stop(&self) -> Stopped {
         match &mut *self.phase() {
             Phase::Idle => Stopped::NothingToStop,
             // Marked rather than ended: the recording ends itself on seeing
             // the cancel, so no other can take its place before it has.
-            Phase::Waiting { cancel, .. } => {
+            Phase::Starting { cancel, .. } => {
                 if let Some(cancel) = cancel.take() {
-                    // Unreceived when its load has just finished: the mark is
-                    // what `Claim::start` then finds.
+                    // Usually unreceived: the mark is what `Claim::start`
+                    // then finds.
                     let _ = cancel.send(());
                 }
                 Stopped::Cancelled
@@ -154,12 +155,12 @@ impl Claim<'_> {
     /// a stop reaches from now on.
     ///
     /// # Errors
-    /// [`RecordingCancelled`] when a stop cancelled the recording while it
-    /// waited.
+    /// [`RecordingCancelled`] when a stop cancelled the recording before
+    /// then.
     pub(crate) fn start(&self) -> Result<broadcast::Receiver<()>, RecordingCancelled> {
         let mut phase = self.state.phase();
         match &*phase {
-            Phase::Waiting {
+            Phase::Starting {
                 id,
                 cancel: Some(_),
             } if *id == self.id => {
@@ -223,10 +224,10 @@ mod tests {
         assert!(stopped.try_recv().is_ok(), "the recorder never heard it");
     }
 
-    /// A stop while the recording waits for its model cancels it, and the
-    /// recording finds that when it would take the microphone.
+    /// A stop while the recording is starting cancels it, and the recording
+    /// finds that when it would take the microphone.
     #[test]
-    fn a_stop_while_waiting_cancels_the_recording() {
+    fn a_stop_while_starting_cancels_the_recording() {
         let state = RecordingState::default();
         let (claim, mut cancelled) = state.reserve().expect("free");
 

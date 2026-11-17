@@ -8,7 +8,7 @@ use super_voice_shared::models::protocol::{DaemonResponse, DaemonStatusEvent, Er
 
 impl SuperSTTDaemon {
     /// Reject a model/backend/device mutation while a daemon-mic recording is in
-    /// flight, or waiting for its model to load. `action` names the operation for the human `message` (e.g.
+    /// flight, from the moment it is reserved. `action` names the operation for the human `message` (e.g.
     /// "change the backend", "switch models"); the machine-readable identity is
     /// always [`ErrorCode::RecordingInProgress`], so callers and clients never
     /// depend on the wording. Real-time (WebSocket) sessions are guarded
@@ -16,8 +16,8 @@ impl SuperSTTDaemon {
     /// mutation's write-lock acquisition already serializes behind them.
     /// Returns `None` when idle.
     pub(crate) fn guard_model_mutation(&self, action: &str) -> Option<DaemonResponse> {
-        // A recording waiting for its model counts: it starts capturing the
-        // moment that load finishes, with whatever model the slot then holds.
+        // A recording whose model is still loading counts: it transcribes with
+        // whatever model the slot holds once that load finishes.
         if self.recording.is_busy() {
             return Some(DaemonResponse::error_with_code(
                 ErrorCode::RecordingInProgress,

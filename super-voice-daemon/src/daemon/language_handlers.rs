@@ -110,7 +110,11 @@ impl SuperSTTDaemon {
     /// The HTTP layer guards `unknown_backend` / `unknown_model` before
     /// dispatch (mirroring options.rs), so a miss here means the backend list
     /// changed between the guard and the handler.
-    async fn find_model_definition(&self, source: &str, model: &str) -> Option<ModelDefinition> {
+    pub(in crate::daemon) async fn find_model_definition(
+        &self,
+        source: &str,
+        model: &str,
+    ) -> Option<ModelDefinition> {
         self.backends
             .read()
             .await

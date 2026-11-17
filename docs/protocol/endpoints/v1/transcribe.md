@@ -162,18 +162,20 @@ when a capture is already in progress.
 | 503  | `connection_rejected`              | Server refused the connection                                           |
 
 When the daemon unloads idle models
-([`/settings/idle_unload`](./settings/idle_unload.md)), a daemon-mic request that finds the selected model unloaded is accepted at once
-and the recording starts when the model has loaded. `409 model_not_loaded` then
-means no model is selected. A load that fails is reported like any failure
-after the `202`/SSE envelope: as the `error` event with `wait: true`, and to
-the user only with `wait: false`. A request carrying `audio_data` waits for the
-load and answers with the transcription.
+([`/settings/idle_unload`](./settings/idle_unload.md)), a daemon-mic request that finds the selected model unloaded is accepted at once,
+and the recording starts capturing while the model loads. `409 model_not_loaded`
+then means no model is selected.
 
-While a recording waits for its model, [`GET /status`](./status.md) reports
-`busy`, a second request gets `409 recording_in_progress`, and
-[`POST /stt/transcribe/stop`](./transcribe/stop.md) or closing a `wait: true`
-connection cancels it before the microphone opens. The model still finishes
-loading.
+- **Previews** start once the model has loaded. A realtime model's live
+  session then catches up on what was said meanwhile.
+- **Stopping** before the load has finished keeps the take: its transcript is
+  decoded once the model is in.
+- **A load that fails** ends the take at once, since nothing it captures could
+  be transcribed. It is reported like any failure after the `202`/SSE
+  envelope: as the `error` event with `wait: true`, and to the user only with
+  `wait: false`.
+- **A request carrying `audio_data`** waits for the load and answers with the
+  transcription.
 
 A failure is also surfaced to the user according to the
 [`/settings/notification_method`](./settings/notification_method.md) setting. With the default,

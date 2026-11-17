@@ -165,14 +165,14 @@ impl SuperSTTDaemon {
             config.transcription.recording_stop_mode
         };
 
-        // A second start while one waits for its model is refused, and leaves
-        // it waiting: only a stop cancels it. Refused here, before a keyboard
-        // is built for a recording that will not run.
-        if self.recording.is_waiting() {
-            log::warn!("Recording request rejected - one is waiting for its model");
+        // A second start while one is starting is refused, and leaves it
+        // starting: only a stop cancels it. Refused here, before a keyboard is
+        // built for a recording that will not run.
+        if self.recording.is_starting() {
+            log::warn!("Recording request rejected - one is starting");
             return DaemonResponse::error_with_code(
                 ErrorCode::RecordingInProgress,
-                "A recording is already waiting for its model to load.",
+                "A recording is already starting.",
             );
         }
         // Toggle behaviour: if one is recording, stop it (if mode allows)

@@ -26,8 +26,8 @@ impl SuperSTTDaemon {
             None => ("unknown".to_string(), false, None),
         };
 
-        // A recording waiting for its model is at work too: a client that
-        // toggles on this would otherwise start a second one, not stop it.
+        // A recording still starting is at work too: a client that toggles on
+        // this would otherwise start a second one, not stop it.
         let busy = self.recording.is_busy();
 
         let mut response = DaemonResponse::success()

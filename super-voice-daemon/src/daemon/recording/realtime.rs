@@ -29,6 +29,7 @@ use serde_json::Value;
 use super_voice_shared::models::protocol::PreviewSource;
 
 use super::RecordingSession;
+use crate::daemon::model_management::idle::PipelineLoad;
 use crate::daemon::types::SuperSTTDaemon;
 use crate::output::typer::Typer;
 use crate::stt_models::wasm::ws_host::{
@@ -48,6 +49,33 @@ const TARGET_RATE: u32 = 16000;
 const MAX_TAKE: Duration = Duration::from_mins(1);
 
 impl SuperSTTDaemon {
+    /// Capture on while the transcription model loads, until it is in, its
+    /// load fails, or capture ends.
+    ///
+    /// A realtime session needs its model from the first frame. The take's
+    /// buffer keeps everything captured, so a session started once the model
+    /// is in catches up on what was said meanwhile. A failed load stops the
+    /// take: nothing it captures could be transcribed.
+    pub(super) async fn capture_until_loaded(
+        &self,
+        session: &RecordingSession,
+        load: &mut PipelineLoad,
+    ) {
+        while load.finished().is_none() && !session.recorder_handle.is_finished() {
+            tokio::time::sleep(STREAM_POLL).await;
+            // Same runaway guard as the stream itself.
+            if session.start_time.elapsed() > MAX_TAKE {
+                warn!("Recording timeout reached, signalling recorder to stop");
+                self.recording.stop();
+                return;
+            }
+        }
+        if load.failure().is_some() {
+            warn!("The transcription model failed to load; ending the take");
+            self.recording.stop();
+        }
+    }
+
     /// Stream the take through the active model's realtime session.
     ///
     /// Returns the final transcript, or `None` when this take is not one a
