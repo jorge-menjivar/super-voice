@@ -2226,6 +2226,78 @@ async fn an_idle_unload_says_the_model_is_idle() {
     assert_eq!(ready["model_state"], "idle");
 }
 
+/// A model that speaks only in a voice the user chooses, with none chosen, is
+/// refused before it is loaded: the backend would refuse it anyway, after
+/// seconds of loading, with a `500`. The answer says which model and where a
+/// voice is set; once one is, nothing is refused on that account.
+#[tokio::test]
+async fn speak_without_a_chosen_voice_is_refused_before_loading() {
+    use std::time::Duration;
+    let daemon = test_daemon().await;
+    let source = "github.com/super-tts/qwen";
+    let mut backend = fixture_backend_local("qwen", source, "Qwen TTS", "qwen-base");
+    backend.models[0].product.voice_kinds =
+        vec![super_voice_registry_types::manifest::VoiceKind::Cloned];
+    *daemon.backends.write().await = vec![backend];
+    {
+        let mut config = daemon.config.write().await;
+        config.update_synthesis_model("qwen-base".into(), source.into());
+        config.idle_unload.after_secs = 30;
+    }
+    // A load on demand waits for this one, so a refusal that returns at once
+    // never tried one.
+    let _load = daemon.model.begin_load().await.expect("a turn");
+
+    let response = tokio::time::timeout(
+        Duration::from_secs(1),
+        daemon.handle_speak("Hello.".to_string()),
+    )
+    .await
+    .expect("refused without waiting for a load");
+    assert_eq!(response.error_code, Some(ErrorCode::VoiceRequired));
+    let message = response.message.unwrap_or_default();
+    assert!(
+        message.contains("qwen-base") && message.contains("/tts/pipeline/1/model/qwen-base/voice"),
+        "{message}"
+    );
+    assert_eq!(
+        daemon.voice_still_to_choose().await.as_deref(),
+        Some("qwen-base")
+    );
+
+    daemon.config.write().await.update_model_voice(
+        source.into(),
+        "qwen-base".into(),
+        Some("voice:0f8fad5b-d9cb-469f-a165-70867728950e".into()),
+    );
+    assert_eq!(
+        daemon.voice_still_to_choose().await,
+        None,
+        "a voice is chosen"
+    );
+}
+
+/// A model with presets speaks without a chosen voice, in its own default, so
+/// it is never refused on that account.
+#[tokio::test]
+async fn a_model_with_presets_needs_no_chosen_voice() {
+    let daemon = test_daemon().await;
+    let source = "github.com/super-tts/kokoro";
+    *daemon.backends.write().await = vec![fixture_backend_local(
+        "kokoro",
+        source,
+        "Kokoro",
+        "kokoro-82m",
+    )];
+    daemon
+        .config
+        .write()
+        .await
+        .update_synthesis_model("kokoro-82m".into(), source.into());
+
+    assert_eq!(daemon.voice_still_to_choose().await, None);
+}
+
 /// Text that cannot be spoken is refused before a model is loaded for it, so
 /// with idle unload on an empty request does not load a model only to fail.
 #[tokio::test]

@@ -180,6 +180,11 @@ pub enum SpeakError {
     /// The backend failed.
     #[error("synthesis_failed: {0}")]
     Synthesis(String),
+    /// The selected model, named here, speaks only in a voice the user
+    /// chooses, and none is chosen. See
+    /// [`voice_still_to_choose`](crate::tts::daemon::types::SuperTTSDaemon::voice_still_to_choose).
+    #[error("voice_required: {0} speaks only in a voice the user chooses, and none is chosen")]
+    VoiceRequired(String),
 }
 
 /// What the sink hands the pump.
@@ -1481,7 +1486,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         &self,
         text: String,
     ) -> super_voice_shared::tts::models::protocol::DaemonResponse {
-        use crate::tts::output::notice::{Failure, Origin};
+        use crate::tts::output::notice::Failure;
         use super_voice_shared::tts::models::protocol::{DaemonResponse, ErrorCode};
 
         // The request is `text`; how it is spoken comes from the user's
@@ -1492,6 +1497,12 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         // would otherwise load the model only to be refused after.
         if let Err(e) = check_text(&text) {
             return DaemonResponse::error_with_code(ErrorCode::InvalidValue, &e.to_string());
+        }
+        // So is a model that cannot speak until the user picks its voice. The
+        // backend refuses it too, but only once the model is loaded, which is
+        // seconds of GPU work for a `500`.
+        if let Some(model) = self.voice_still_to_choose().await {
+            return self.refuse_speech(SpeakError::VoiceRequired(model)).await;
         }
         // A model is selected and failed to load: the notice says that, not
         // "no model loaded", which would send the user to load one. The answer
@@ -1519,10 +1530,20 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
             .speak(&self.model, &text, voice.as_deref(), language.as_deref())
             .await;
 
-        let err = match result {
-            Ok(utterance) => return DaemonResponse::success().with_utterance_id(utterance.id),
-            Err(e) => e,
-        };
+        match result {
+            Ok(utterance) => DaemonResponse::success().with_utterance_id(utterance.id),
+            Err(e) => self.refuse_speech(e).await,
+        }
+    }
+
+    /// Answer a `speak` that could not be served, with the coded error its
+    /// cause maps to.
+    async fn refuse_speech(
+        &self,
+        err: SpeakError,
+    ) -> super_voice_shared::tts::models::protocol::DaemonResponse {
+        use crate::tts::output::notice::{Failure, Origin};
+        use super_voice_shared::tts::models::protocol::{DaemonResponse, ErrorCode};
 
         // A `speak` is as likely to come from a keyboard shortcut as from an
         // app, and a shortcut has no UI to show the coded error to. So every
@@ -1536,6 +1557,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
             SpeakError::Synthesis(detail) => {
                 Some(Failure::synthesis_failed(Origin::Backend, detail))
             }
+            SpeakError::VoiceRequired(model) => Some(Failure::no_voice_chosen(model)),
         } {
             let method = crate::tts::output::notification::method_for_speech(
                 self.config.read().await.notification_method,
@@ -1551,6 +1573,13 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
             SpeakError::NotLoaded => {
                 DaemonResponse::error_with_code(ErrorCode::ModelNotLoaded, "model_not_loaded")
             }
+            SpeakError::VoiceRequired(model) => DaemonResponse::error_with_code(
+                ErrorCode::VoiceRequired,
+                &format!(
+                    "{model} speaks only in a voice the user chooses, and none is chosen; \
+                     set one with POST /tts/pipeline/1/model/{model}/voice"
+                ),
+            ),
             e => DaemonResponse::error(&e.to_string()),
         }
     }
@@ -1572,6 +1601,10 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
     /// # Errors
     /// See [`SpeakError`].
     pub(crate) async fn begin_speech(&self) -> Result<SpeakSession, SpeakError> {
+        // Before the load, for the reason `handle_speak` gives.
+        if let Some(model) = self.voice_still_to_choose().await {
+            return Err(SpeakError::VoiceRequired(model));
+        }
         // A load that fails is logged; the session reports the missing model.
         let _ = self.stage().ensure_loaded().await;
         let (voice, language) = self.stored_defaults().await;
@@ -1593,6 +1626,31 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
     ///
     /// Resolved per utterance rather than cached, so a voice changed while
     /// something is queued takes effect on the next thing said.
+    /// The selected model's name, when it speaks only in a voice the user
+    /// chooses and none is chosen: its `voice_kinds` offers no preset and it
+    /// declares no `default_voice`, so a backend has nothing to fall back on
+    /// and refuses the utterance. `None` for any other model, and when nothing
+    /// is selected — the load that follows reports that.
+    ///
+    /// Read from the selection rather than the loaded model, so it can be asked
+    /// before anything is loaded. A stored voice the model no longer declares
+    /// counts as none, as [`stored_defaults`](Self::stored_defaults) drops it.
+    pub(crate) async fn voice_still_to_choose(&self) -> Option<String> {
+        use super_voice_registry_types::manifest::VoiceKind;
+        let (model, source) = self.stage_selection().await?;
+        let def = self.find_model_definition(&source, &model).await?;
+        if def.product.voice_kinds.contains(&VoiceKind::Preset)
+            || def.product.default_voice.is_some()
+        {
+            return None;
+        }
+        let config = self.config.read().await;
+        let chosen = config
+            .model_voice(&source, &model)
+            .is_some_and(|voice| check_voice(&def, voice).is_ok());
+        (!chosen).then_some(model)
+    }
+
     pub(crate) async fn stored_defaults(&self) -> (Option<String>, Option<String>) {
         // The definition is copied out and the model guard dropped before the
         // config is read, so the two locks are never held at once and no

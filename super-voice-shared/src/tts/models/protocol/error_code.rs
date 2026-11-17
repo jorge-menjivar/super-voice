@@ -39,6 +39,11 @@ pub enum ErrorCode {
     /// `POST /tts/speak/read` found no text where the read method looks:
     /// nothing selected, or nothing copied. The request succeeds once there is.
     NothingToRead,
+    /// The selected model speaks only in a voice the user chooses — a cloned
+    /// or described one, with no preset to fall back on — and none is chosen.
+    /// The request succeeds once one is set with
+    /// `POST /tts/pipeline/{stage}/model/{model}/voice`.
+    VoiceRequired,
 
     // --- 400 Bad Request: the client gave the daemon something it couldn't
     // use. ---
@@ -83,7 +88,8 @@ impl ErrorCode {
             | Self::NoSwitchInProgress
             | Self::ModelNotLoaded
             | Self::BuildNotInstalled
-            | Self::NothingToRead => 409,
+            | Self::NothingToRead
+            | Self::VoiceRequired => 409,
             Self::InvalidModel
             | Self::InvalidBackend
             | Self::CudaUnavailable
@@ -125,6 +131,15 @@ mod tests {
     /// `model_not_loaded` is a state conflict, not bad input: the request is
     /// well-formed and becomes valid once a model is loaded. It shares the 409
     /// group with the other "daemon's current state forbids it" codes.
+    #[test]
+    fn voice_required_is_a_state_conflict() {
+        assert_eq!(ErrorCode::VoiceRequired.http_status(), 409);
+        assert_eq!(
+            serde_json::to_string(&ErrorCode::VoiceRequired).unwrap(),
+            r#""voice_required""#
+        );
+    }
+
     #[test]
     fn model_not_loaded_is_a_state_conflict() {
         assert_eq!(ErrorCode::ModelNotLoaded.http_status(), 409);

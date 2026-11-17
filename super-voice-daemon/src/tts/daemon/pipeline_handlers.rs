@@ -134,7 +134,7 @@ impl SuperTTSDaemon {
     /// model and no backend, and reporting "nothing selected" for a config the
     /// daemon *would* load at its next start is a lie the client has no way to
     /// detect.
-    async fn stage_selection(&self) -> Option<(String, String)> {
+    pub(in crate::tts::daemon) async fn stage_selection(&self) -> Option<(String, String)> {
         let (model, source) = {
             let config = self.config.read().await;
             (
