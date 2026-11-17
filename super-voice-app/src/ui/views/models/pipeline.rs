@@ -152,16 +152,12 @@ fn summary(app: &AppModel, stage: Stage) -> StepSummary {
             &app.current_device,
         )
     };
+    // A model out of memory until its next use runs on nothing yet, so the
+    // line is its name alone. The step marks it idle in its corner.
     if let Some(model) = app.idle_model(stage) {
-        summary.detail = idle(model);
+        summary.detail = model.to_string();
     }
     summary
-}
-
-/// `model · Idle`, for a model out of memory until its next use: it runs on
-/// nothing yet, and the next use loads it.
-fn idle(model: &str) -> String {
-    format!("{model} · {}", crate::fl!("idle"))
 }
 
 /// The content width the rows need to stay rows: both ends, three carets and
@@ -300,13 +296,15 @@ fn end<'a>(name: String, caption: String, stacked: bool) -> Element<'a, Message>
 }
 
 /// A stage: its name and status dot, the backend in it and how its model
-/// stands, with a bar while a download or load reports how far it is. Pressing
-/// it opens the stage's card under the rows; the open one wears the accent
-/// border.
+/// stands, with a bar while a download or load reports how far it is, or
+/// "Idle" in its bottom-right corner while its model is out of memory until
+/// its next use, as the stage's card has. Pressing it opens the stage's card
+/// under the rows; the open one wears the accent border.
 fn step(app: &AppModel, stage: Stage, selected: Stage) -> Element<'_, Message> {
     let open = stage == selected;
     let mut summary = summary(app, stage);
     let in_flight = operation(app.model_operations.get(stage));
+    let idle = in_flight.is_none() && app.idle_model(stage).is_some();
     let mut progress = None;
     if let Some((detail, fraction)) = in_flight {
         summary.detail = detail;
@@ -320,10 +318,18 @@ fn step(app: &AppModel, stage: Stage, selected: Stage) -> Element<'_, Message> {
             cosmic::theme::Text::Color(muted)
         })
         .width(Length::Fill);
+    let detail = text::caption(summary.detail).class(cosmic::theme::Text::Color(muted));
+    let detail: Element<'_, Message> = if idle {
+        row![detail, super::surface::idle_label()]
+            .align_y(Alignment::Center)
+            .into()
+    } else {
+        detail.into()
+    };
     let mut content = column![
         row![label, super::status_dot(stage_status(app, stage), 8.0)].align_y(Alignment::Center),
         text::body(summary.title).font(cosmic::font::semibold()),
-        text::caption(summary.detail).class(cosmic::theme::Text::Color(muted)),
+        detail,
     ]
     .spacing(2)
     .width(Length::Fill);
@@ -452,11 +458,6 @@ mod tests {
         );
         assert_eq!(summary.title, "Tidy");
         assert_eq!(summary.detail, "Not loaded");
-    }
-
-    #[test]
-    fn an_idle_model_says_so() {
-        assert_eq!(idle("whisper-base"), "whisper-base · Idle");
     }
 
     #[test]

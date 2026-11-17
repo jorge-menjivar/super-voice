@@ -247,7 +247,7 @@ impl ModelStatus {
             Self::Blocked => crate::fl!("backend-setup-incomplete"),
             Self::NotLoaded => crate::fl!("no-model-loaded"),
             Self::Ready => crate::fl!("model-loaded-and-ready"),
-            Self::Idle => crate::fl!("model-idle"),
+            Self::Idle => crate::fl!("model-ready"),
             Self::Failed => crate::fl!("the-selected-model-isn-t-loaded"),
         }
     }
