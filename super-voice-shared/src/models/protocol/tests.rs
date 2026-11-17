@@ -841,3 +841,18 @@ fn post_processor_getters_parse() {
         Command::ClearPostProcessorBackend
     ));
 }
+
+/// No backend serves an empty name, so it is refused as malformed rather than
+/// looked up and reported as an unknown model; the refusal says how to stop a
+/// stage, which is what a client sending one most likely wanted.
+#[test]
+fn set_model_refuses_an_empty_or_missing_model() {
+    for data in [json!({ "model": "" }), json!({})] {
+        let err =
+            Command::try_from(make_request("set_model", Some(data))).expect_err("nothing to load");
+        assert_eq!(
+            err,
+            "model is missing or empty; to stop a stage, use DELETE"
+        );
+    }
+}

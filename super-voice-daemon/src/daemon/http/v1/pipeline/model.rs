@@ -110,7 +110,7 @@ Omitting `source` uses the backend already selected for the stage.",
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "Accepted. The model may still be downloading — read `switch` to follow it.", body = StageMutation),
-        (status = 400, description = "No such model (`invalid_model`), or no such backend (`invalid_backend`).", body = ErrorEnvelope),
+        (status = 400, description = "`model` was missing or empty (`invalid_value`); no installed backend serves `(model, source)` in this stage's role (`invalid_model`); or `source` was omitted and the stage has no backend (`invalid_backend`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
         (status = 404, description = "No such stage (`unknown_stage`).", body = ErrorEnvelope),
