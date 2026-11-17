@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+//! Recording, on speech to text's Behavior tab: when a recording stops and
+//! whether its text is typed as it comes, and the test that records.
 use cosmic::Element;
 use cosmic::iced::widget::row;
 use cosmic::iced::{Alignment, Length};
@@ -6,14 +8,13 @@ use cosmic::widget::{self, button, settings, text};
 use super_voice_shared::models::protocol::PreviewSource;
 use super_voice_shared::models::recording_stop_mode::RecordingStopMode;
 
-use super::common::error_banner;
 use crate::state::RecordingStatus;
 use crate::ui::messages::{
     Message, PreviewTypingMessage, RecordingMessage, RecordingStopModeMessage,
 };
 
-/// Recording settings section: stop mode + preview typing
-fn settings_section(
+/// Recording section: stop mode + preview typing.
+pub(super) fn settings_section(
     recording_stop_mode: RecordingStopMode,
     preview_typing_enabled: bool,
 ) -> Element<'static, Message> {
@@ -29,7 +30,7 @@ fn settings_section(
     let selected_index = modes.iter().position(|m| *m == recording_stop_mode);
 
     settings::section()
-        .title(crate::fl!("settings"))
+        .title(crate::fl!("recording"))
         .add(
             settings::item::builder(crate::fl!("stop-mode"))
                 .description(crate::fl!("controls-how-to-stop-transcribing"))
@@ -81,16 +82,17 @@ fn live_caption(source: PreviewSource) -> String {
     }
 }
 
-/// Test recording section: record button, audio level, live preview line,
-/// transcription output
-fn test_section<'a>(
+/// The recording test's rows, for the Behavior tab's one Test section: status,
+/// the record button with the audio level, the live preview line, and the
+/// transcript.
+pub(super) fn test_rows<'a>(
     recording_status: &'a RecordingStatus,
     transcription_text: &'a str,
     preview_text: &'a str,
     preview_source: Option<PreviewSource>,
     audio_level: f32,
     is_speech_detected: bool,
-) -> Element<'a, Message> {
+) -> Vec<Element<'a, Message>> {
     let recording_text = match recording_status {
         RecordingStatus::Recording => {
             if is_speech_detected {
@@ -156,48 +158,10 @@ fn test_section<'a>(
             .width(Length::Fill)
     };
 
-    settings::section()
-        .title(crate::fl!("test"))
-        .add(settings::item(
-            crate::fl!("status"),
-            text::body(recording_text),
-        ))
-        .add(settings::flex_item(crate::fl!("audio-level"), audio_widget))
-        .add(settings::flex_item(crate::fl!("live"), live_widget))
-        .add(transcription_widget)
-        .into()
-}
-
-/// Recording page: settings + test recording
-// reason: one parameter per piece of view state the page renders; grouping them would only add indirection.
-#[allow(clippy::too_many_arguments)]
-pub fn page<'a>(
-    recording_stop_mode: RecordingStopMode,
-    preview_typing_enabled: bool,
-    recording_status: &'a RecordingStatus,
-    transcription_text: &'a str,
-    preview_text: &'a str,
-    preview_source: Option<PreviewSource>,
-    audio_level: f32,
-    is_speech_detected: bool,
-    action_error: Option<&'a str>,
-) -> Element<'a, Message> {
-    let mut blocks = Vec::new();
-    if let Some(message) = action_error {
-        blocks.push(error_banner(message));
-    }
-    blocks.push(settings_section(
-        recording_stop_mode,
-        preview_typing_enabled,
-    ));
-    blocks.push(test_section(
-        recording_status,
-        transcription_text,
-        preview_text,
-        preview_source,
-        audio_level,
-        is_speech_detected,
-    ));
-
-    settings::view_column(blocks).into()
+    vec![
+        settings::item(crate::fl!("status"), text::body(recording_text)).into(),
+        settings::flex_item(crate::fl!("audio-level"), audio_widget).into(),
+        settings::flex_item(crate::fl!("live"), live_widget).into(),
+        transcription_widget.into(),
+    ]
 }

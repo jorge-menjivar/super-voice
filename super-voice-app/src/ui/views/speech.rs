@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
+//! The speech test, on text to speech's Behavior tab: text to speak, and the
+//! level of what the daemon is saying.
 use cosmic::Element;
 use cosmic::iced::widget::row;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{self, button, settings, text};
 
-use super::common::error_banner;
-use crate::state::{SpeakingStatus, SpeechState};
+use crate::state::SpeakingStatus;
 use crate::ui::messages::{Message, SpeechMessage};
 
-/// Test speech section: a text field, speak/stop, and the live output level.
-fn test_section<'a>(
+/// The speech test's rows, for the Behavior tab's one Test section: status,
+/// a text field, and speak/stop with the live output level.
+pub(super) fn test_rows<'a>(
     speaking_status: &'a SpeakingStatus,
     test_text: &'a str,
     audio_level: f32,
     is_playing: bool,
-) -> Element<'a, Message> {
+) -> Vec<Element<'a, Message>> {
     let status_text = match speaking_status {
         SpeakingStatus::Speaking => {
             if is_playing {
@@ -57,32 +59,9 @@ fn test_section<'a>(
     .align_y(Alignment::Center)
     .spacing(10);
 
-    settings::section()
-        .title(crate::fl!("test"))
-        .add(settings::item(
-            crate::fl!("status"),
-            text::body(status_text),
-        ))
-        .add(settings::flex_item(crate::fl!("text"), input))
-        .add(settings::flex_item(
-            crate::fl!("output-level"),
-            level_widget,
-        ))
-        .into()
-}
-
-/// The Speech tab: a test utterance.
-pub fn page<'a>(speech: &'a SpeechState, action_error: Option<&'a str>) -> Element<'a, Message> {
-    let mut blocks = Vec::new();
-    if let Some(message) = action_error {
-        blocks.push(error_banner(message));
-    }
-    blocks.push(test_section(
-        &speech.status,
-        &speech.test_text,
-        speech.level,
-        speech.is_playing,
-    ));
-
-    settings::view_column(blocks).into()
+    vec![
+        settings::item(crate::fl!("status"), text::body(status_text)).into(),
+        settings::flex_item(crate::fl!("text"), input).into(),
+        settings::flex_item(crate::fl!("output-level"), level_widget).into(),
+    ]
 }

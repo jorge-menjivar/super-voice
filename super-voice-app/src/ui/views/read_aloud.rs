@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! The Read aloud tab: where the read-aloud shortcut reads from, and a test
-//! that reads it now. Text to speech's counterpart to Input Simulation, which
-//! holds the write method and its typing test.
+//! Read aloud, on text to speech's Behavior tab: where the read-aloud shortcut
+//! reads from, and a test that reads it now. Text to speech's counterpart to
+//! Typing, which holds the write method and its typing test.
 
 use cosmic::Element;
-use cosmic::widget::{self, button, settings, text};
+use cosmic::widget::{self, button, settings};
 use super_voice_shared::models::read_method::ReadMethod;
 
-use super::common::error_banner;
 use crate::state::SpeakingStatus;
-use crate::ui::messages::{Message, ReadMethodMessage, SpeechMessage};
+use crate::ui::messages::{Message, ReadMethodMessage};
 
-/// Where the shortcut reads from.
-fn settings_section(read_method: ReadMethod) -> Element<'static, Message> {
+/// Read aloud section: where the shortcut reads from.
+pub(super) fn settings_section(read_method: ReadMethod) -> Element<'static, Message> {
     let methods = ReadMethod::ALL;
     let names: Vec<String> = methods
         .iter()
@@ -20,7 +19,7 @@ fn settings_section(read_method: ReadMethod) -> Element<'static, Message> {
         .collect();
     let selected = methods.iter().position(|m| *m == read_method);
     settings::section()
-        .title(crate::fl!("settings"))
+        .title(crate::fl!("read-aloud-section"))
         .add(
             settings::item::builder(crate::fl!("read-from"))
                 .description(crate::fl!("read-from-description"))
@@ -31,47 +30,22 @@ fn settings_section(read_method: ReadMethod) -> Element<'static, Message> {
         .into()
 }
 
-/// Read what the setting names now, the way the shortcut does, or stop.
-fn test_section(
+/// The read test's row, for the Behavior tab's one Test section: reads what
+/// the setting names now, the way the shortcut does. While anything is
+/// speaking the button waits: the speech test's row above has the Stop.
+pub(super) fn test_row(
     read_method: ReadMethod,
     speaking_status: &SpeakingStatus,
 ) -> Element<'static, Message> {
-    let status = match speaking_status {
-        SpeakingStatus::Speaking => crate::fl!("speaking-status"),
-        SpeakingStatus::Idle => crate::fl!("not-speaking-status"),
-    };
-    // Stop while anything is speaking, like the shortcut's second press.
-    let action = match speaking_status {
-        SpeakingStatus::Speaking => button::destructive(crate::fl!("stop"))
-            .on_press(Message::Speech(SpeechMessage::StopSpeaking)),
-        SpeakingStatus::Idle => button::suggested(crate::fl!("read"))
-            .on_press(Message::ReadMethod(ReadMethodMessage::Test)),
-    };
+    let idle = matches!(speaking_status, SpeakingStatus::Idle);
+    let action = button::suggested(crate::fl!("read"))
+        .on_press_maybe(idle.then_some(Message::ReadMethod(ReadMethodMessage::Test)));
     let hint = match read_method {
         ReadMethod::Selection => crate::fl!("read-test-selection"),
         ReadMethod::Clipboard => crate::fl!("read-test-clipboard"),
     };
-    settings::section()
-        .title(crate::fl!("test"))
-        .add(settings::item(crate::fl!("status"), text::body(status)))
-        .add(
-            settings::item::builder(crate::fl!("read-test"))
-                .description(hint)
-                .control(action),
-        )
+    settings::item::builder(crate::fl!("read-test"))
+        .description(hint)
+        .control(action)
         .into()
-}
-
-pub fn page<'a>(
-    read_method: ReadMethod,
-    speaking_status: &SpeakingStatus,
-    action_error: Option<&'a str>,
-) -> Element<'a, Message> {
-    let mut blocks = Vec::new();
-    if let Some(message) = action_error {
-        blocks.push(error_banner(message));
-    }
-    blocks.push(settings_section(read_method));
-    blocks.push(test_section(read_method, speaking_status));
-    settings::view_column(blocks).into()
 }

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+//! Typing, on speech to text's Behavior tab: how transcribed text is typed
+//! into the focused window, and the tests that type.
 use cosmic::Element;
 use cosmic::iced::widget::row;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{self, Id, button, settings, text};
 use super_voice_shared::models::write_method::WriteMethod;
 
-use super::common::error_banner;
 use crate::ui::messages::{Message, WriteMethodMessage};
 
 /// Id of the test field, so the Test button can focus it before the daemon
@@ -16,14 +17,12 @@ pub fn test_field_id() -> Id {
     Id::new("write_method_test_field")
 }
 
-/// Input simulation page: write method selection + a live typing test
-pub fn page<'a>(
+/// Typing section: how transcribed text is typed into the focused window,
+/// and, once a test has run, what it actually typed through.
+pub(super) fn typing_section(
     write_method: WriteMethod,
-    test_text: &'a str,
     resolved: Option<WriteMethod>,
-    countdown: Option<u8>,
-    action_error: Option<&'a str>,
-) -> Element<'a, Message> {
+) -> Element<'static, Message> {
     // Not a fixed list: `xdg_desktop_portal` and `ydotool` are Linux session
     // technologies, and offering a method the daemon has no backend for would
     // be offering a setting that cannot work.
@@ -34,22 +33,15 @@ pub fn page<'a>(
         .collect();
     let selected_index = methods.iter().position(|m| *m == write_method);
 
-    let mut blocks = Vec::new();
-    if let Some(message) = action_error {
-        blocks.push(error_banner(message));
-    }
-
-    let mut method_section = settings::section()
-        .title(crate::fl!("input-simulation"))
-        .add(
-            settings::item::builder(crate::fl!("write-method"))
-                .description(crate::fl!("controls-how-transcribed-text-is-typed-into"))
-                .control(widget::dropdown(
-                    method_names,
-                    selected_index,
-                    move |index| Message::WriteMethod(WriteMethodMessage::Changed(methods[index])),
-                )),
-        );
+    let mut method_section = settings::section().title(crate::fl!("typing")).add(
+        settings::item::builder(crate::fl!("write-method"))
+            .description(crate::fl!("controls-how-transcribed-text-is-typed-into"))
+            .control(widget::dropdown(
+                method_names,
+                selected_index,
+                move |index| Message::WriteMethod(WriteMethodMessage::Changed(methods[index])),
+            )),
+    );
 
     // "Auto" names a chain, not a backend, so the configured value alone never
     // says what is really typing. A test is the only thing that resolves it.
@@ -60,16 +52,13 @@ pub fn page<'a>(
                 .control(text::body(crate::i18n::write_method_name(resolved))),
         );
     }
-    blocks.push(method_section.into());
-
-    blocks.push(test_section(test_text, countdown));
-
-    settings::view_column(blocks).into()
+    method_section.into()
 }
 
-/// Test section: the in-app typing test, plus the delayed one that targets
-/// whatever window the user switches to.
-fn test_section(test_text: &str, countdown: Option<u8>) -> Element<'_, Message> {
+/// The typing test's rows, for the Behavior tab's one Test section: the
+/// in-app typing test, plus the delayed one that targets whatever window the
+/// user switches to.
+pub(super) fn test_rows(test_text: &str, countdown: Option<u8>) -> Vec<Element<'_, Message>> {
     let test_row = row![
         widget::text_input(crate::fl!("typed-text-lands-here-progress"), test_text)
             .id(test_field_id())
@@ -96,17 +85,14 @@ fn test_section(test_text: &str, countdown: Option<u8>) -> Element<'_, Message> 
             .into()
     };
 
-    settings::section()
-        .title(crate::fl!("test"))
-        .add(
-            settings::item::builder(crate::fl!("typing-test"))
-                .description(crate::fl!("types-a-short-string-into-the-field"))
-                .flex_control(test_row),
-        )
-        .add(
-            settings::item::builder(crate::fl!("test-another-window"))
-                .description(crate::fl!("counts-down-before-typing-so-you-can"))
-                .control(delayed_control),
-        )
-        .into()
+    vec![
+        settings::item::builder(crate::fl!("typing-test"))
+            .description(crate::fl!("types-a-short-string-into-the-field"))
+            .flex_control(test_row)
+            .into(),
+        settings::item::builder(crate::fl!("test-another-window"))
+            .description(crate::fl!("counts-down-before-typing-so-you-can"))
+            .control(delayed_control)
+            .into(),
+    ]
 }
