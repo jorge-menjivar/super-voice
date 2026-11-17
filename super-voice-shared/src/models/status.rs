@@ -5,6 +5,7 @@
 //! feature, side by side. A client reads the feature it is about — the
 //! dictation hotkey reads `stt.busy`, a speech widget `tts.busy`.
 
+use crate::models::protocol::ModelState;
 use serde::{Deserialize, Serialize};
 
 /// What `GET /v1/status` answers with.
@@ -40,6 +41,21 @@ pub struct FeatureStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "openapi", schema(example = "whisper-tiny"))]
     pub current_model: Option<String>,
+    /// The model selected in the feature's first stage, loaded or not. Absent
+    /// when none is selected, and from a daemon older than the field.
+    ///
+    /// `current_model` alone could not tell a model asleep from none at all:
+    /// with idle unload on, a selected model is out of memory most of the
+    /// time, and `voice status` said "(none loaded)" for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(example = "whisper-tiny"))]
+    pub selected_model: Option<String>,
+    /// Where `selected_model` stands, as `GET /stt/pipeline/1/model` and
+    /// `GET /tts/pipeline/1/model` report it: `loaded`, `idle` (out of memory,
+    /// and its next use loads it) or `not_loaded`, which is also what it says
+    /// with nothing selected. Absent from a daemon older than the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_state: Option<ModelState>,
     /// Whether the feature is at work right now. See [`VoiceStatus`].
     pub busy: bool,
 }

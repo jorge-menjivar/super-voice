@@ -32,15 +32,19 @@ Content-Type: application/json
 {
   "status": "success",
   "stt": {
-    "device":        "cuda",
-    "model_loaded":  true,
-    "current_model": "whisper-tiny",
-    "busy":          false
+    "device":         "cuda",
+    "model_loaded":   true,
+    "current_model":  "whisper-tiny",
+    "selected_model": "whisper-tiny",
+    "model_state":    "loaded",
+    "busy":           false
   },
   "tts": {
-    "device":        "unknown",
-    "model_loaded":  false,
-    "busy":          false
+    "device":         "unknown",
+    "model_loaded":   false,
+    "selected_model": "kokoro-82m",
+    "model_state":    "idle",
+    "busy":           false
   }
 }
 ```
@@ -53,6 +57,8 @@ present, with the same fields:
 | `device`        | string  | The accelerator the feature's loaded model is actually running on: `"cpu"`, `"cuda"`, `"rocm"`, `"metal"`, `"vulkan"`, or `"remote"` for an online model. `"unknown"` if nothing is loaded. |
 | `model_loaded`  | bool    | `false` while the feature's model is still loading, after a failed switch, or when none is selected |
 | `current_model` | string? | The loaded model's name (e.g. `whisper-tiny`); absent when `model_loaded` is `false`   |
+| `selected_model` | string? | The model selected in the feature's first stage, loaded or not; absent when none is selected. With [idle unload](./settings/idle_unload.md) on, a selected model is out of memory most of the time, which `current_model` alone cannot tell from no model at all. Absent from a daemon older than the field. |
+| `model_state`   | string? | Where `selected_model` stands, as [`GET /stt/pipeline/1/model`](./pipeline/model.md) and [`GET /tts/pipeline/1/model`](./tts/pipeline/model.md) report it: `loaded`, `idle` (out of memory, and its next use loads it) or `not_loaded`, which is also what it says with nothing selected. Absent from a daemon older than the field. |
 | `busy`          | bool    | Whether the feature is at work right now. For `stt`, `true` while a daemon-mic cycle is active — audio capture, which starts at once even while a model loads on demand, **and** the transcription and typing after it, which wait for that load; a toggle hotkey consults it and calls [`POST /stt/transcribe/stop`](./transcribe/stop.md) when `true`, [`POST /stt/transcribe`](./transcribe.md) when `false`. For `tts`, `true` while an utterance is being synthesized or played; a [`POST /tts/speak`](./tts/speak.md) then interrupts it. |
 
 **Errors:**

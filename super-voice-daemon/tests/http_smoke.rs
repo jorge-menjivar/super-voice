@@ -117,6 +117,14 @@ async fn http_endpoints_respond() {
             !part.busy,
             "{feature}: a freshly-booted daemon is not busy: {status:?}"
         );
+        // Nothing selected is said as such, not left for a client to infer
+        // from a missing `current_model`, which an asleep model shares.
+        assert_eq!(part.selected_model, None, "{feature}: {status:?}");
+        assert_eq!(
+            part.model_state,
+            Some(super_voice_shared::models::protocol::ModelState::NotLoaded),
+            "{feature}: {status:?}"
+        );
     }
 
     // --- POST /stt/transcribe (fire-and-forget) ---

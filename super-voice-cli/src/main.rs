@@ -284,19 +284,40 @@ async fn cmd_status(
     token: String,
 ) -> super_voice_shared::daemon::http_client::HttpResult<()> {
     let status = http_client::status(socket_path, &token).await?;
-    for (feature, part, at_work) in [
-        ("Speech to text", &status.stt, "recording"),
-        ("Text to speech", &status.tts, "speaking"),
+    for (feature, part, at_work, not_at_work) in [
+        ("Speech to text", &status.stt, "recording", "not recording"),
+        ("Text to speech", &status.tts, "speaking", "not speaking"),
     ] {
         println!("{feature}");
-        println!(
-            "  Model:  {}",
-            part.current_model.as_deref().unwrap_or("(none loaded)")
-        );
+        println!("  Model:  {}", model_line(part));
         println!("  Device: {}", part.device);
-        println!("  State:  {}", if part.busy { at_work } else { "idle" });
+        // Not "idle": that is a model asleep, which the Model line says.
+        println!(
+            "  State:  {}",
+            if part.busy { at_work } else { not_at_work }
+        );
     }
     Ok(())
+}
+
+/// What `voice status` says about a feature's model: the one selected, and
+/// whether it is in memory.
+///
+/// With idle unload on, a selected model is out of memory most of the time,
+/// and this said "(none loaded)" for it, as if nothing were selected.
+fn model_line(part: &super_voice_shared::models::status::FeatureStatus) -> String {
+    use super_voice_shared::models::protocol::ModelState;
+    match (part.selected_model.as_deref(), part.model_state) {
+        (Some(model), Some(ModelState::Loaded)) => model.to_string(),
+        (Some(model), Some(ModelState::Idle)) => format!("{model} (asleep; loads when next used)"),
+        (Some(model), Some(ModelState::NotLoaded)) => format!("{model} (not loaded)"),
+        (None, Some(_)) => "(none selected)".to_string(),
+        // A daemon older than `selected_model` and `model_state`.
+        _ => part
+            .current_model
+            .clone()
+            .unwrap_or_else(|| "(none loaded)".to_string()),
+    }
 }
 
 async fn cmd_record(
@@ -466,6 +487,64 @@ fn cmd_logout() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    /// A feature's status as a daemon reports it, for [`super::model_line`].
+    fn part(
+        selected_model: Option<&str>,
+        model_state: Option<super_voice_shared::models::protocol::ModelState>,
+        current_model: Option<&str>,
+    ) -> super_voice_shared::models::status::FeatureStatus {
+        super_voice_shared::models::status::FeatureStatus {
+            device: "unknown".to_string(),
+            model_loaded: current_model.is_some(),
+            current_model: current_model.map(str::to_string),
+            selected_model: selected_model.map(str::to_string),
+            model_state,
+            busy: false,
+        }
+    }
+
+    #[test]
+    fn status_names_the_selected_model_and_whether_it_is_in_memory() {
+        use super::model_line;
+        use super_voice_shared::models::protocol::ModelState;
+        assert_eq!(
+            model_line(&part(
+                Some("whisper-tiny"),
+                Some(ModelState::Loaded),
+                Some("whisper-tiny")
+            )),
+            "whisper-tiny"
+        );
+        // What it said "(none loaded)" for.
+        assert_eq!(
+            model_line(&part(Some("whisper-tiny"), Some(ModelState::Idle), None)),
+            "whisper-tiny (asleep; loads when next used)"
+        );
+        assert_eq!(
+            model_line(&part(
+                Some("whisper-tiny"),
+                Some(ModelState::NotLoaded),
+                None
+            )),
+            "whisper-tiny (not loaded)"
+        );
+        assert_eq!(
+            model_line(&part(None, Some(ModelState::NotLoaded), None)),
+            "(none selected)"
+        );
+    }
+
+    /// A daemon older than the fields reports only the loaded model.
+    #[test]
+    fn status_from_an_older_daemon_reads_as_before() {
+        use super::model_line;
+        assert_eq!(
+            model_line(&part(None, None, Some("whisper-tiny"))),
+            "whisper-tiny"
+        );
+        assert_eq!(model_line(&part(None, None, None)), "(none loaded)");
+    }
+
     use super::SCOPES;
     use super_voice_shared::daemon::scopes::is_known_scope;
 

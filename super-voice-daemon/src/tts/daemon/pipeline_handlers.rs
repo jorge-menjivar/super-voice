@@ -86,7 +86,7 @@ impl SuperTTSDaemon {
     /// client that was just told which model the stage points at has to get a
     /// `loaded` about *that* model, not about whatever happens to occupy the
     /// slot.
-    pub(in crate::tts::daemon) async fn stage_model(&self) -> StageModelReport {
+    pub(crate) async fn stage_model(&self) -> StageModelReport {
         let Some((model, source)) = self.stage_selection().await else {
             return StageModelReport {
                 stage: SYNTHESIS_STAGE,

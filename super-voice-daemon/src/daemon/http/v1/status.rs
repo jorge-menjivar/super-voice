@@ -38,6 +38,13 @@ Subscriber introspection and other operator detail are not exposed here — see 
 pub(crate) async fn status(State(s): State<AppState>) -> Response {
     let stt = dispatch(&s.daemon, build_request("status", None)).await;
     let tts = s.daemon.tts.handle_status().await;
+    // The selection and where it stands, as each feature's first stage reports
+    // them on its pipeline route.
+    let stt_slot = s
+        .daemon
+        .stage_model(crate::daemon::device_management::PipelineStage::Transcription)
+        .await;
+    let tts_slot = s.daemon.tts.stage_model().await;
     // Each `handle_status` fills all four on every success; the fallbacks keep
     // the endpoint answering its own shape rather than a partial one if a
     // future command path ever forgets.
@@ -45,6 +52,8 @@ pub(crate) async fn status(State(s): State<AppState>) -> Response {
         device: tts.device.unwrap_or_else(|| "unknown".to_string()),
         model_loaded: tts.model_loaded.unwrap_or(false),
         current_model: tts.current_model,
+        model_state: Some(tts_slot.state),
+        selected_model: tts_slot.model,
         busy: tts.busy.unwrap_or(false),
     };
     narrowed(stt, |r| VoiceStatus {
@@ -53,6 +62,8 @@ pub(crate) async fn status(State(s): State<AppState>) -> Response {
             device: r.device.unwrap_or_else(|| "unknown".to_string()),
             model_loaded: r.model_loaded.unwrap_or(false),
             current_model: r.current_model,
+            model_state: Some(stt_slot.state),
+            selected_model: stt_slot.model,
             busy: r.busy.unwrap_or(false),
         },
         tts,
