@@ -3787,3 +3787,57 @@ async fn a_stage_refuses_a_model_of_the_other_stage() {
         "{loaded:?}"
     );
 }
+
+/// Every settings write announces itself, so a client shows a change another
+/// client made: named for the setting, and for the feature it belongs to, or
+/// for no feature when it is the daemon's own.
+#[tokio::test]
+async fn every_settings_write_announces_itself() {
+    use crate::daemon::events::Topic;
+    use super_voice_shared::models::read_method::ReadMethod;
+    use super_voice_shared::models::write_method::WriteMethod;
+    let daemon = test_daemon().await;
+    let mut rx = daemon.events.subscribe(Topic::DaemonStatusChanged);
+    // One bus for both features in the daemon; a test daemon's text to
+    // speech has a bus of its own.
+    let mut tts_rx = daemon.tts.events.subscribe(Topic::DaemonStatusChanged);
+
+    let _ = daemon.handle_set_audio_theme("classic".to_string());
+    let _ = daemon.handle_set_volume(40);
+    let _ = daemon
+        .handle_set_notification_method("desktop".to_string())
+        .await;
+    let _ = daemon.handle_set_write_method(WriteMethod::Auto).await;
+    let _ = daemon.handle_set_preview_typing(true).await;
+    let _ = daemon
+        .handle_set_recording_stop_mode(RecordingStopMode::ManualOnly)
+        .await;
+    let _ = daemon.handle_set_read_method(ReadMethod::Clipboard).await;
+
+    let mut announced = Vec::new();
+    for rx in [&mut rx, &mut tts_rx] {
+        while let Ok(Ok((_topic, event))) =
+            timeout(Duration::from_millis(200), rx.recv_json()).await
+        {
+            if event["status"] == "settings_changed" {
+                announced.push((
+                    event["setting"].as_str().unwrap_or_default().to_string(),
+                    event["feature"].as_str().map(str::to_string),
+                ));
+            }
+        }
+    }
+    let expected: Vec<(String, Option<String>)> = [
+        ("audio_theme", None),
+        ("volume", None),
+        ("notification_method", None),
+        ("write_method", Some("stt")),
+        ("preview_typing", Some("stt")),
+        ("recording_stop_mode", Some("stt")),
+        ("read_method", Some("tts")),
+    ]
+    .into_iter()
+    .map(|(setting, feature)| (setting.to_string(), feature.map(str::to_string)))
+    .collect();
+    assert_eq!(announced, expected);
+}

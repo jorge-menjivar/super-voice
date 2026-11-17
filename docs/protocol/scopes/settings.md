@@ -34,8 +34,7 @@ scope and asked for `daemon_status_changed` or `download_progress`.
 |-----------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
 | `/stt/pipeline/{stage}/model`, `/stt/pipeline/{stage}/model/{model}/device` (when it reloads), and the same under `/tts/pipeline` | Yes — `daemon_status_changed` (and `download_progress` while files are being pulled). Each names the `feature` it is about; speech to text's also carry the `stage`, since every stage reports its own model lifecycle. Text to speech has one stage, so its events carry no `stage`. |
 | `/stt/pipeline/1`, `/tts/pipeline/1` (backend selection)                                                                            | Yes — `daemon_status_changed` (`active_backend_changed` variant)                                      |
-| `/settings/language`, `/settings/idle_unload`, `/settings/update_check_enabled`, `/settings/update_beta_optin`, `/stt/pipeline/{stage}` (post-processing stages), every write under `/stt/context` and `/stt/backend/{backend_id}/context`                                     | Yes — `daemon_status_changed` (`settings_changed` variant, carrying which setting changed)            |
-| `/settings/audio_theme`, `/settings/volume`, `/settings/write_method`, `/settings/read_method`, `/settings/notification_method`, `/settings/recording_stop_mode`, `/settings/preview_typing` | No. Clients that want to see *another* app change one of these must re-`GET` the relevant endpoint.  |
+| Every `/settings/{name}` write, `/stt/pipeline/{stage}` (post-processing stages), every write under `/stt/context` and `/stt/backend/{backend_id}/context`                                     | Yes — `daemon_status_changed` (`settings_changed` variant, carrying which setting changed)            |
 
 ## Endpoint reference
 

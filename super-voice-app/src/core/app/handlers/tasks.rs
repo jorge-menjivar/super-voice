@@ -89,24 +89,8 @@ pub(in crate::core::app) fn fetch_registry_catalog(refresh: bool) -> Task<cosmic
 /// is fetched with its own dedicated GET call — no bulk `fetch_daemon_config`.
 pub(in crate::core::app) fn build_load_settings_tasks() -> Task<cosmic::Action<Message>> {
     Task::batch([
-        Task::perform(get_current_audio_theme(), |result| match result {
-            Ok(theme) => cosmic::Action::App(Message::Daemon(
-                DaemonMessage::CurrentAudioThemeLoaded(theme),
-            )),
-            Err(e) => {
-                warn!("Failed to load audio theme: {e}");
-                cosmic::Action::App(Message::Daemon(DaemonMessage::CurrentAudioThemeLoaded(
-                    AudioTheme::default(),
-                )))
-            }
-        }),
-        Task::perform(get_volume(), |result| match result {
-            Ok(vol) => cosmic::Action::App(Message::Daemon(DaemonMessage::VolumeLoaded(vol))),
-            Err(e) => {
-                warn!("Failed to load volume: {e}");
-                cosmic::Action::App(Message::Daemon(DaemonMessage::VolumeLoaded(100)))
-            }
-        }),
+        load_audio_theme(),
+        load_volume(),
         Task::batch(crate::state::BlockStage::ALL.map(super::stage::load_block)),
         // Contexts are global and the daemon owns them, so a restart under an
         // open Contexts page would otherwise leave the list showing whatever
@@ -115,81 +99,136 @@ pub(in crate::core::app) fn build_load_settings_tasks() -> Task<cosmic::Action<M
         Task::done(cosmic::Action::App(Message::Contexts(
             crate::ui::messages::ContextsMessage::Reload,
         ))),
-        Task::perform(get_preview_typing(), |result| match result {
-            Ok(enabled) => cosmic::Action::App(Message::PreviewTyping(
-                PreviewTypingMessage::SettingLoaded(enabled),
-            )),
-            Err(e) => {
-                log::warn!("Failed to load preview typing setting: {e}");
-                cosmic::Action::App(Message::PreviewTyping(PreviewTypingMessage::SettingLoaded(
-                    false,
-                )))
-            }
-        }),
-        Task::perform(get_recording_stop_mode(), |result| {
-            use super_voice_shared::models::recording_stop_mode::RecordingStopMode;
-            match result {
-                Ok(mode_str) => {
-                    let mode = mode_str.parse::<RecordingStopMode>().unwrap_or_default();
-                    cosmic::Action::App(Message::RecordingStopMode(
-                        RecordingStopModeMessage::Loaded(mode),
-                    ))
-                }
-                Err(e) => {
-                    log::warn!("Failed to load recording stop mode: {e}");
-                    cosmic::Action::App(Message::RecordingStopMode(
-                        RecordingStopModeMessage::Loaded(RecordingStopMode::default()),
-                    ))
-                }
-            }
-        }),
-        Task::perform(get_read_method(), |result| {
-            use super_voice_shared::models::read_method::ReadMethod;
-            let method = match result {
-                Ok(method) => method.parse::<ReadMethod>().unwrap_or_default(),
-                Err(e) => {
-                    log::warn!("Failed to load the read method: {e}");
-                    ReadMethod::default()
-                }
-            };
-            cosmic::Action::App(Message::ReadMethod(ReadMethodMessage::Loaded(method)))
-        }),
-        Task::perform(get_write_method(), |result| {
-            use super_voice_shared::models::write_method::WriteMethod;
-            match result {
-                Ok(method_str) => {
-                    let method = method_str.parse::<WriteMethod>().unwrap_or_default();
-                    cosmic::Action::App(Message::WriteMethod(WriteMethodMessage::Loaded(method)))
-                }
-                Err(e) => {
-                    log::warn!("Failed to load write method: {e}");
-                    cosmic::Action::App(Message::WriteMethod(WriteMethodMessage::Loaded(
-                        WriteMethod::default(),
-                    )))
-                }
-            }
-        }),
-        Task::perform(get_notification_method(), |result| {
-            use super_voice_shared::models::notification_method::NotificationMethod;
-            match result {
-                Ok(method_str) => {
-                    let method = method_str.parse::<NotificationMethod>().unwrap_or_default();
-                    cosmic::Action::App(Message::NotificationMethod(
-                        NotificationMethodMessage::Loaded(method),
-                    ))
-                }
-                Err(e) => {
-                    warn!("Failed to load notification method: {e}");
-                    cosmic::Action::App(Message::NotificationMethod(
-                        NotificationMethodMessage::Loaded(NotificationMethod::default()),
-                    ))
-                }
-            }
-        }),
+        load_preview_typing(),
+        load_recording_stop_mode(),
+        load_read_method(),
+        load_write_method(),
+        load_notification_method(),
         load_idle_unload(),
         refresh_update_status(),
         load_update_check_enabled(),
     ])
+}
+
+// One loader per setting: what a reconnect reads, and what a
+// `settings_changed` naming that setting reads again, so a change another
+// client makes shows here.
+
+/// Fetch the sound theme.
+pub(in crate::core::app) fn load_audio_theme() -> Task<cosmic::Action<Message>> {
+    Task::perform(get_current_audio_theme(), |result| match result {
+        Ok(theme) => cosmic::Action::App(Message::Daemon(DaemonMessage::CurrentAudioThemeLoaded(
+            theme,
+        ))),
+        Err(e) => {
+            warn!("Failed to load audio theme: {e}");
+            cosmic::Action::App(Message::Daemon(DaemonMessage::CurrentAudioThemeLoaded(
+                AudioTheme::default(),
+            )))
+        }
+    })
+}
+
+/// Fetch the sound volume.
+pub(in crate::core::app) fn load_volume() -> Task<cosmic::Action<Message>> {
+    Task::perform(get_volume(), |result| match result {
+        Ok(vol) => cosmic::Action::App(Message::Daemon(DaemonMessage::VolumeLoaded(vol))),
+        Err(e) => {
+            warn!("Failed to load volume: {e}");
+            cosmic::Action::App(Message::Daemon(DaemonMessage::VolumeLoaded(100)))
+        }
+    })
+}
+
+/// Fetch whether previews are typed.
+pub(in crate::core::app) fn load_preview_typing() -> Task<cosmic::Action<Message>> {
+    Task::perform(get_preview_typing(), |result| match result {
+        Ok(enabled) => cosmic::Action::App(Message::PreviewTyping(
+            PreviewTypingMessage::SettingLoaded(enabled),
+        )),
+        Err(e) => {
+            log::warn!("Failed to load preview typing setting: {e}");
+            cosmic::Action::App(Message::PreviewTyping(PreviewTypingMessage::SettingLoaded(
+                false,
+            )))
+        }
+    })
+}
+
+/// Fetch what stops a recording.
+pub(in crate::core::app) fn load_recording_stop_mode() -> Task<cosmic::Action<Message>> {
+    Task::perform(get_recording_stop_mode(), |result| {
+        use super_voice_shared::models::recording_stop_mode::RecordingStopMode;
+        match result {
+            Ok(mode_str) => {
+                let mode = mode_str.parse::<RecordingStopMode>().unwrap_or_default();
+                cosmic::Action::App(Message::RecordingStopMode(
+                    RecordingStopModeMessage::Loaded(mode),
+                ))
+            }
+            Err(e) => {
+                log::warn!("Failed to load recording stop mode: {e}");
+                cosmic::Action::App(Message::RecordingStopMode(
+                    RecordingStopModeMessage::Loaded(RecordingStopMode::default()),
+                ))
+            }
+        }
+    })
+}
+
+/// Fetch where reading aloud takes its text from.
+pub(in crate::core::app) fn load_read_method() -> Task<cosmic::Action<Message>> {
+    Task::perform(get_read_method(), |result| {
+        use super_voice_shared::models::read_method::ReadMethod;
+        let method = match result {
+            Ok(method) => method.parse::<ReadMethod>().unwrap_or_default(),
+            Err(e) => {
+                log::warn!("Failed to load the read method: {e}");
+                ReadMethod::default()
+            }
+        };
+        cosmic::Action::App(Message::ReadMethod(ReadMethodMessage::Loaded(method)))
+    })
+}
+
+/// Fetch how transcripts are typed.
+pub(in crate::core::app) fn load_write_method() -> Task<cosmic::Action<Message>> {
+    Task::perform(get_write_method(), |result| {
+        use super_voice_shared::models::write_method::WriteMethod;
+        match result {
+            Ok(method_str) => {
+                let method = method_str.parse::<WriteMethod>().unwrap_or_default();
+                cosmic::Action::App(Message::WriteMethod(WriteMethodMessage::Loaded(method)))
+            }
+            Err(e) => {
+                log::warn!("Failed to load write method: {e}");
+                cosmic::Action::App(Message::WriteMethod(WriteMethodMessage::Loaded(
+                    WriteMethod::default(),
+                )))
+            }
+        }
+    })
+}
+
+/// Fetch how failures are reported.
+pub(in crate::core::app) fn load_notification_method() -> Task<cosmic::Action<Message>> {
+    Task::perform(get_notification_method(), |result| {
+        use super_voice_shared::models::notification_method::NotificationMethod;
+        match result {
+            Ok(method_str) => {
+                let method = method_str.parse::<NotificationMethod>().unwrap_or_default();
+                cosmic::Action::App(Message::NotificationMethod(
+                    NotificationMethodMessage::Loaded(method),
+                ))
+            }
+            Err(e) => {
+                warn!("Failed to load notification method: {e}");
+                cosmic::Action::App(Message::NotificationMethod(
+                    NotificationMethodMessage::Loaded(NotificationMethod::default()),
+                ))
+            }
+        }
+    })
 }
 
 /// Fetch the idle-unload setting. Also the `SettingsChanged { setting:

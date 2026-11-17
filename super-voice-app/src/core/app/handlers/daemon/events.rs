@@ -330,6 +330,19 @@ impl AppModel {
                 crate::core::app::handlers::stage::load_block(BlockStage::Synthesis),
                 self.read_transcription_idle(),
             ])),
+            // The rest of the daemon's settings: another client may have
+            // changed one, and this app shows each of them somewhere.
+            "audio_theme" => Some(crate::core::app::handlers::tasks::load_audio_theme()),
+            "volume" => Some(crate::core::app::handlers::tasks::load_volume()),
+            "notification_method" => {
+                Some(crate::core::app::handlers::tasks::load_notification_method())
+            }
+            "write_method" => Some(crate::core::app::handlers::tasks::load_write_method()),
+            "preview_typing" => Some(crate::core::app::handlers::tasks::load_preview_typing()),
+            "recording_stop_mode" => {
+                Some(crate::core::app::handlers::tasks::load_recording_stop_mode())
+            }
+            "read_method" => Some(crate::core::app::handlers::tasks::load_read_method()),
             // A context was added, edited, deleted, or put in force.
             // One topic covers the whole family because the answer to
             // any of them is the same: re-read the list. The open

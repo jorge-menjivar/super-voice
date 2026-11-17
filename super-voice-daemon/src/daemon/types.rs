@@ -296,11 +296,11 @@ impl SuperSTTDaemon {
     /// derived state — e.g. a per-model language that follows the global
     /// value must re-fetch its resolution block. Reuses the
     /// `daemon_status_changed` topic clients already subscribe to;
-    /// `setting` names what changed (currently `"language"`,
-    /// `"update_check_enabled"`, `"update_beta_optin"`, `"post_processor"`, or
-    /// `"contexts"` — see `docs/protocol/endpoints/v1/events.md`). Shared by
-    /// the language, settings and context handlers so the event shape can't
-    /// drift between call sites.
+    /// `setting` names what changed: speech to text's own settings, a
+    /// per-model language, `"post_processor"` or `"contexts"` — see
+    /// `docs/protocol/endpoints/v1/events.md`. Shared by the language,
+    /// settings and context handlers so the event shape can't drift between
+    /// call sites.
     pub fn publish_settings_changed(&self, setting: &str) {
         self.events
             .publish_daemon_status(DaemonStatusEvent::SettingsChanged {
@@ -309,7 +309,8 @@ impl SuperSTTDaemon {
     }
 
     /// [`publish_settings_changed`](Self::publish_settings_changed) for a
-    /// setting both features read: the global language and the update
+    /// setting that is the daemon's rather than one feature's: the global
+    /// language, Sleep When Idle, the sounds, failure notices and the update
     /// settings. It names no feature, so both features' clients re-fetch.
     pub fn publish_shared_setting_changed(&self, setting: &str) {
         self.events
