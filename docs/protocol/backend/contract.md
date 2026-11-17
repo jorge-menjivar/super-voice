@@ -180,7 +180,9 @@ The dictation context is speech to text's alone:
 - `x-voice-prompt` and `x-voice-vocabulary` carry the
   [dictation context](../endpoints/v1/context.md) the user has in force for this
   backend: what they are dictating, so the model can hear it. They are sent
-  **only** to a backend declaring `[capabilities] context = true`, and each is
+  **only** for a model declaring
+  [`accepts_context = true`](./config.md#models), or of a backend still
+  declaring the deprecated `[capabilities] context = true`, and each is
   omitted when its half is empty — a backend using one and not the other never
   has to tell "absent" from "empty". The user can point one backend at a
   different context, or at none, so two backends may receive different values on

@@ -67,7 +67,7 @@ Authorization: Bearer …64hex…
       "kind":   "wasm",                 // "wasm" | "subprocess"
       "allowed_hosts": ["api.openai.com"],  // hosts the manifest declares; [] for subprocess/local
       "installed_accel": [],            // accel of the installed asset; [] for a wasm/cloud backend
-      "accepts_context": true,          // reads x-voice-prompt / x-voice-vocabulary
+      "accepts_context": true,          // any of its models takes the dictation context
       "models": [
         {
           "name":                 "whisper-1",
@@ -77,7 +77,8 @@ Authorization: Bearer …64hex…
           "supported_languages":  ["en", "es-419", "es-ES", "fr"],  // accepted BCP-47 tags
           "supported_devices":    ["none"],
           "estimated_vram_bytes": 0,          // conservative GPU estimate; 0 = cloud/unknown
-          "role":                 "transcription"  // "transcription" | "post_processor" | "synthesis"
+          "role":                 "transcription",  // "transcription" | "post_processor" | "synthesis"
+          "accepts_context":      true             // reads x-voice-prompt / x-voice-vocabulary
         }
       ],
       "secrets": [
@@ -117,7 +118,8 @@ Authorization: Bearer …64hex…
 | `…[].models`      | array            | Models served, as `{ name, multilingual, primary_language, supported_languages, supported_devices, estimated_vram_bytes }`. `multilingual` is `true` when the model accepts a language tag. `primary_language` is the model's default BCP-47 tag (the fallback when no override or global setting applies). `supported_languages` is the non-empty array of BCP-47 tags the model accepts; these feed the per-model language picker and the [`/backend/{backend_id}/models/{model}/settings/language`](./pipeline/language.md) resolution. `supported_devices` is a non-empty array drawn from `["cpu", "gpu", "none"]`; `"none"` marks a remote/online model with no local compute. `estimated_vram_bytes` is a conservative GPU memory estimate (weights + KV cache + overhead); `0` when unknown or not GPU-resident. See [`GET /gpu_info`](./gpu_info.md) for the detected GPU memory it's weighed against. |
 | `…[].secrets`     | array            | Declared secrets: `{ name, label, description, required }`. `label` falls back to `name` when absent. Secret **values** are never returned. |
 | `…[].options`     | array            | Declared options: `{ name, label, description, type, default, required, value }`. `label` falls back to `name` when absent; `value` is the effective value (config override if set, else `default`). |
-| `…[].accepts_context` | bool         | Whether the backend declared [`[capabilities] context = true`](../../backend/config.md#capabilities) and is therefore handed the user's [dictation context](./context.md) as `x-voice-prompt` / `x-voice-vocabulary`. `false` for a backend that did not, and from a daemon older than the field — which is the same thing in effect, since such a daemon sends the headers to nobody. A settings UI needs this to say which installed backends will actually use a context: one that ignores the headers has no way to say so at runtime, so without it the user cannot tell a context that did nothing from one that is not working. |
+| `…[].models[].accepts_context` | bool | Whether the model is handed the user's [dictation context](./context.md) as `x-voice-prompt` / `x-voice-vocabulary`: a speech-to-text model declaring [`accepts_context = true`](../../backend/config.md#models), or one of a backend still declaring the deprecated `[capabilities] context = true`. Always `false` for a synthesis model. `false` from a daemon older than the field. A settings UI needs this to say which models will actually use a context: one that ignores the headers has no way to say so at runtime, so without it the user cannot tell a context that did nothing from one that is not working. |
+| `…[].accepts_context` | bool         | Whether any of the backend's models takes a context: the sum of `models[].accepts_context`, as the [registry listing](./registry/backends.md) sums it up on its entry. `false` from a daemon older than the field, which is the same thing in effect, since such a daemon sends the headers to nobody. |
 
 `models[].role` says what a model is for, and so which feature it serves:
 `"transcription"` and `"post_processor"` are speech to text's, `"synthesis"`

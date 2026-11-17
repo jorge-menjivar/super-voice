@@ -14,7 +14,7 @@ use crate::stt_models::transcribe::{
 };
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use super_voice_registry_types::manifest::{Capabilities, Device, ModelRole, VoiceCapabilities};
+use super_voice_registry_types::manifest::{Capabilities, Device, ModelRole};
 use super_voice_shared::models::contexts::{DictationContext, MAX_PROMPT_CHARS};
 use super_voice_shared::models::protocol::ErrorCode;
 
@@ -323,9 +323,9 @@ impl Transcribe for RecordingStage {
     }
 }
 
-/// A discovered backend that declares it can be handed a context, and nothing
-/// else — no secrets to look up, no options to resolve.
-fn context_capable(source: &str) -> DiscoveredBackend {
+/// A discovered backend with nothing to resolve: no secrets to look up, no
+/// options. Whether a stage on it is handed a context is its model's to say.
+fn plain_backend(source: &str) -> DiscoveredBackend {
     DiscoveredBackend {
         description: String::new(),
         dir: std::path::PathBuf::from("/tmp").join(source.replace('/', "-")),
@@ -338,17 +338,12 @@ fn context_capable(source: &str) -> DiscoveredBackend {
         allowed_hosts: Vec::new(),
         secrets: Vec::new(),
         options: Vec::new(),
-        capabilities: Capabilities {
-            websocket: false,
-            product: VoiceCapabilities {
-                context: true,
-                ..Default::default()
-            },
-        },
+        capabilities: Capabilities::default(),
         models: Vec::new(),
     }
 }
 
+/// A model of `role`, declaring that it takes the dictation context.
 fn definition(name: &str, source: &str, role: ModelRole) -> ModelDefinition {
     ModelDefinition {
         name: name.to_string(),
@@ -362,6 +357,7 @@ fn definition(name: &str, source: &str, role: ModelRole) -> ModelDefinition {
         realtime: false,
         product: super_voice_registry_types::manifest::VoiceModel {
             force_preview_support: true,
+            accepts_context: true,
             ..super_voice_registry_types::manifest::VoiceModel::new(role)
         },
         provider: None,
@@ -398,8 +394,7 @@ async fn two_stages_on_two_backends(
 ) -> (&'static str, &'static str, SeenContexts, SeenContexts) {
     let transcription = "github.com/x/whisper";
     let processor = "github.com/x/tidy";
-    *daemon.backends.write().await =
-        vec![context_capable(transcription), context_capable(processor)];
+    *daemon.backends.write().await = vec![plain_backend(transcription), plain_backend(processor)];
 
     let (stage1, seen1) = stage("whisper-1", transcription, ModelRole::Transcription);
     let (stage2, seen2) = stage("tidy", processor, ModelRole::PostProcessor);
@@ -526,6 +521,48 @@ async fn pinning_one_backend_leaves_the_other_stage_alone() {
         last_prompt(&seen2).as_deref(),
         Some(r#""I dictate code.""#),
         "and still follows the active context"
+    );
+}
+
+/// Two stages on one backend, of which only one runs a model that takes a
+/// context: the context reaches that stage and not the other. The backend used
+/// to be resolved once for both, which handed both the same headers.
+#[tokio::test]
+async fn a_context_reaches_only_the_stage_whose_model_takes_one() {
+    let daemon = test_daemon().await;
+    let source = "github.com/x/both";
+    *daemon.backends.write().await = vec![plain_backend(source)];
+    let (stage1, seen1) = stage("whisper-1", source, ModelRole::Transcription);
+    let (mut stage2, seen2) = stage("tidy", source, ModelRole::PostProcessor);
+    stage2.definition.product.accepts_context = false;
+    crate::daemon::types::put_model(&daemon.model, stage1).await;
+    crate::daemon::types::put_model(&daemon.post_processor, stage2).await;
+    daemon
+        .handle_set_context(DictationContext {
+            id: "coding".to_string(),
+            name: "Coding".to_string(),
+            prompt: "I dictate code.".to_string(),
+            vocabulary: Vec::new(),
+        })
+        .await;
+
+    daemon
+        .handle_set_active_context(Some("coding".to_string()))
+        .await;
+
+    assert_eq!(
+        last_prompt(&seen1).as_deref(),
+        Some(r#""I dictate code.""#),
+        "the model that takes a context was not handed it"
+    );
+    assert!(
+        !seen2.lock().unwrap().is_empty(),
+        "the other stage is still handed its backend's settings"
+    );
+    assert_eq!(
+        last_prompt(&seen2),
+        None,
+        "the model that takes no context was handed one"
     );
 }
 

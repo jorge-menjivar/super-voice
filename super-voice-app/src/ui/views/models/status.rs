@@ -67,6 +67,7 @@ mod unmet_requirements_tests {
                 primary_language: String::new(),
                 realtime: false,
                 role: "transcription".into(),
+                accepts_context: false,
             }],
             secrets,
             options,
@@ -388,6 +389,7 @@ mod model_status_tests {
                 primary_language: String::new(),
                 realtime: false,
                 role: "transcription".into(),
+                accepts_context: false,
             }],
             secrets: vec![BackendSecret {
                 name: "openai_api_key".to_string(),

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::daemon::types::SuperSTTDaemon;
+#[cfg(any(feature = "wasm-backends", feature = "subprocess-backends"))]
+use crate::stt_models::ModelDefinition;
 use crate::stt_models::backends::DiscoveredBackend;
 use log::{info, warn};
 use super_voice_registry_types::manifest::{ModelRole, Opt};
@@ -113,8 +115,9 @@ impl SuperSTTDaemon {
                         primary_language: m.primary_language.clone(),
                         realtime: m.realtime,
                         role: m.product.role.to_string(),
+                        accepts_context: m.product.takes_context(&b.capabilities.product),
                     })
-                    .collect();
+                    .collect::<Vec<_>>();
                 let secrets = b
                     .secrets
                     .iter()
@@ -149,6 +152,8 @@ impl SuperSTTDaemon {
                         }
                     })
                     .collect();
+                // The sum of the models, as the registry index sums them up.
+                let accepts_context = models.iter().any(|m| m.accepts_context);
                 BackendInfo {
                     source: b.source.clone(),
                     name: b.name.clone(),
@@ -180,7 +185,7 @@ impl SuperSTTDaemon {
                     models,
                     secrets,
                     options,
-                    accepts_context: b.capabilities.product.context,
+                    accepts_context,
                 }
             })
             .collect();
@@ -269,14 +274,23 @@ impl SuperSTTDaemon {
     async fn reconfigure_stages_from(&self, source: &str) -> Option<String> {
         #[cfg(any(feature = "wasm-backends", feature = "subprocess-backends"))]
         {
+            // The model each stage runs from `source`, if it runs one.
+            let from_source = |definition: &ModelDefinition| {
+                (definition.source == source).then(|| definition.clone())
+            };
             let transcription = self
                 .model
                 .read()
                 .await
                 .as_ref()
-                .map(|l| l.definition.source.clone());
-            let processor = self.post_processor_source().await;
-            if transcription.as_deref() != Some(source) && processor.as_deref() != Some(source) {
+                .and_then(|l| from_source(&l.definition));
+            let processor = self
+                .post_processor
+                .read()
+                .await
+                .as_ref()
+                .and_then(|l| from_source(&l.definition));
+            if transcription.is_none() && processor.is_none() {
                 return None;
             }
             let backend = {
@@ -290,23 +304,34 @@ impl SuperSTTDaemon {
             let Some(backend) = backend else {
                 return Some(format!("{source} is not installed"));
             };
-            // Resolved without either slot held. It reads config and the
-            // secrets, and the transcribe path holds those slots for a whole
-            // inference.
-            let context = match self.backend_context(&backend).await {
+            // Resolved per model, since only a model that takes the dictation
+            // context is handed it. And without either slot held: it reads
+            // config and the secrets, and the transcribe path holds those slots
+            // for a whole inference.
+            let transcription_context =
+                match self.stage_context(&backend, transcription.as_ref()).await {
+                    Ok(context) => context,
+                    Err(e) => return Some(e.to_string()),
+                };
+            let processor_context = match self.stage_context(&backend, processor.as_ref()).await {
                 Ok(context) => context,
                 Err(e) => return Some(e.to_string()),
             };
             // Re-checked under the guard, because the slots were unlocked while
-            // the context resolved: pushing settings into whatever is loaded
-            // *now* would hand one backend another backend's configuration.
+            // the contexts resolved: pushing settings into whatever is loaded
+            // *now* would hand one model another model's configuration.
+            let still = |loaded: &ModelDefinition, resolved: Option<&ModelDefinition>| {
+                resolved.is_some_and(|r| r.source == loaded.source && r.name == loaded.name)
+            };
             if let Some(loaded) = self.model.read().await.as_ref()
-                && loaded.definition.source == source
+                && still(&loaded.definition, transcription.as_ref())
+                && let Some(context) = transcription_context
             {
-                loaded.instance.reconfigure(context.clone());
+                loaded.instance.reconfigure(context);
             }
             if let Some(loaded) = self.post_processor.read().await.as_ref()
-                && loaded.definition.source == source
+                && still(&loaded.definition, processor.as_ref())
+                && let Some(context) = processor_context
             {
                 loaded.instance.reconfigure(context);
             }
@@ -316,6 +341,20 @@ impl SuperSTTDaemon {
         {
             let _ = source;
             None
+        }
+    }
+
+    /// [`backend_context`](Self::backend_context) for the model a stage runs
+    /// from `backend`, or `None` when it runs none.
+    #[cfg(any(feature = "wasm-backends", feature = "subprocess-backends"))]
+    async fn stage_context(
+        &self,
+        backend: &DiscoveredBackend,
+        model: Option<&ModelDefinition>,
+    ) -> anyhow::Result<Option<crate::stt_models::transcribe::BackendContext>> {
+        match model {
+            Some(model) => self.backend_context(backend, model).await.map(Some),
+            None => Ok(None),
         }
     }
 

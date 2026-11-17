@@ -65,7 +65,7 @@ impl SuperSTTDaemon {
                     .await
                     .effective(&def, chosen)
                     .unwrap_or_default();
-                self.instantiate_subprocess(&backend, name, &resolved, stage)
+                self.instantiate_subprocess(&backend, &def, &resolved, stage)
                     .await?
             }
             other => bail!("backend {} declares unknown kind '{other}'", backend.source),
@@ -80,7 +80,7 @@ impl SuperSTTDaemon {
         def: &ModelDefinition,
     ) -> Result<Box<dyn Transcribe>> {
         use crate::stt_models::transcribe::ModelInfoData;
-        let context = self.backend_context(backend).await?;
+        let context = self.backend_context(backend, def).await?;
         let component = backend.dir.join(&backend.entrypoint);
         let info = ModelInfoData::new(
             def.name.clone(),
@@ -127,15 +127,16 @@ impl SuperSTTDaemon {
     async fn instantiate_subprocess(
         &self,
         backend: &DiscoveredBackend,
-        name: &str,
+        def: &ModelDefinition,
         device_pref: &str,
         stage: crate::daemon::device_management::PipelineStage,
     ) -> Result<Box<dyn Transcribe>> {
+        let name = def.name.as_str();
         // The same secret/option headers the WASM transport is handed: a
         // subprocess backend reads its `[[options]]` off the request too.
         // Resolved before the download tracker exists, so a missing required
         // secret fails the load without leaving a progress card behind.
-        let headers = self.backend_context(backend).await?.headers;
+        let headers = self.backend_context(backend, def).await?.headers;
 
         // Count the files we'll provision so the tracker's denominator is
         // accurate from the first broadcast. Each `[[models.files]]` entry is
@@ -211,7 +212,7 @@ impl SuperSTTDaemon {
     async fn instantiate_subprocess(
         &self,
         backend: &DiscoveredBackend,
-        _name: &str,
+        _def: &ModelDefinition,
         _device_pref: &str,
         _stage: crate::daemon::device_management::PipelineStage,
     ) -> Result<Box<dyn Transcribe>> {
@@ -221,8 +222,10 @@ impl SuperSTTDaemon {
         )
     }
 
-    /// Everything the daemon resolves from the user's settings for one
-    /// backend, as the one bundle both a load and a settings write hand over.
+    /// Everything the daemon resolves from the user's settings for one model
+    /// of a backend, as the one bundle both a load and a settings write hand
+    /// over. The backend's secrets and options, and the dictation context when
+    /// the model takes one.
     ///
     /// The single entry point matters more than the saving: the headers and the
     /// egress list must come from one snapshot of the options (see
@@ -238,9 +241,10 @@ impl SuperSTTDaemon {
     pub(crate) async fn backend_context(
         &self,
         backend: &DiscoveredBackend,
+        model: &ModelDefinition,
     ) -> Result<crate::stt_models::transcribe::BackendContext> {
         let overrides = self.backend_option_overrides(backend).await?;
-        let headers = self.backend_headers(backend, &overrides).await?;
+        let headers = self.backend_headers(backend, model, &overrides).await?;
         // Only the WASM transport can dial anything; a subprocess backend runs
         // under `PrivateNetwork=yes`, so there is no egress for a `base_url` to
         // authorize and nothing to derive.
@@ -255,7 +259,8 @@ impl SuperSTTDaemon {
     }
 
     /// Form the `x-voice-secret-*` / `x-voice-option-*` headers a backend is
-    /// handed on every `/v1` request, whichever transport carries it.
+    /// handed on every `/v1` request for `model`, whichever transport carries
+    /// it, and the context headers when `model` takes a context.
     ///
     /// Secrets come solely from the daemon's secrets file, by backend source
     /// and secret name, as the settings app wrote them — there is no
@@ -266,6 +271,7 @@ impl SuperSTTDaemon {
     async fn backend_headers(
         &self,
         backend: &DiscoveredBackend,
+        model: &ModelDefinition,
         overrides: &std::collections::HashMap<String, String>,
     ) -> Result<Vec<(String, String)>> {
         let mut headers = Vec::new();
@@ -305,17 +311,17 @@ impl SuperSTTDaemon {
                 );
             }
         }
-        // The user's dictation context, for a backend that said it can use one.
+        // The user's dictation context, for a model that said it can use one.
         // Read last and in a scope of its own: no await may happen under the
         // config guard, and everything above this works from the secrets in
         // memory or the `overrides` snapshot it was handed.
         //
-        // Gated on the capability rather than sent to everyone, because a
-        // backend that does not read these headers has no way to say so and
-        // would silently ignore a vocabulary the user watched themselves type.
-        // With the flag, a settings UI can tell them which backends will
-        // actually hear it.
-        if backend.capabilities.product.context {
+        // Gated on the model's declaration rather than sent to everyone,
+        // because a model that does not read these headers has no way to say
+        // so and would silently ignore a vocabulary the user watched themselves
+        // type. With the declaration, a settings UI can tell them which models
+        // will actually hear it.
+        if model.product.takes_context(&backend.capabilities.product) {
             let context = self
                 .config
                 .read()
@@ -611,7 +617,11 @@ mod tests {
                 .await
                 .expect("a valid base_url");
             let headers = daemon
-                .backend_headers(&backend, &overrides)
+                .backend_headers(
+                    &backend,
+                    &crate::daemon::test_fixtures::transcription_model(source),
+                    &overrides,
+                )
                 .await
                 .expect("headers for a secret-free backend");
             let injected = headers
@@ -664,7 +674,11 @@ mod tests {
             .await
             .expect("a valid base_url");
         let headers = daemon
-            .backend_headers(&backend, &overrides)
+            .backend_headers(
+                &backend,
+                &crate::daemon::test_fixtures::transcription_model(source),
+                &overrides,
+            )
             .await
             .expect("headers for a secret-free backend");
         let injected = headers
@@ -768,7 +782,11 @@ mod tests {
         // Drive the real header path, not the resolver it happens to call: the
         // regression this pins is `backend_headers` reading config for itself.
         let headers = daemon
-            .backend_headers(&backend, &overrides)
+            .backend_headers(
+                &backend,
+                &crate::daemon::test_fixtures::transcription_model(source),
+                &overrides,
+            )
             .await
             .expect("headers for a secret-free backend");
         let injected = headers
@@ -781,15 +799,16 @@ mod tests {
         assert_eq!(egress, vec!["10.0.0.5:8080", "10.0.0.5"]);
     }
 
-    /// A backend that did not ask for a context is not handed one.
+    /// A model that did not ask for a context is not handed one, and one that
+    /// did is, under both header names.
     ///
-    /// The gate is not tidiness: a backend that ignores these headers has no
-    /// way to say so, and the user would watch themselves type a vocabulary
-    /// that reached nothing. The flag is what lets a settings UI tell them
-    /// which backends will actually hear it.
+    /// The gate is not tidiness: a model that ignores these headers has no way
+    /// to say so, and the user would watch themselves type a vocabulary that
+    /// reached nothing. The declaration is what lets a settings UI tell them
+    /// which models will actually hear it.
     #[tokio::test]
-    async fn a_context_reaches_only_a_backend_that_declared_it() {
-        use crate::daemon::test_fixtures::openai_backend;
+    async fn a_context_reaches_only_a_model_that_declared_it() {
+        use crate::daemon::test_fixtures::{openai_backend, transcription_model};
         use crate::daemon::types::test_daemon;
         use crate::stt_models::backends::DiscoveredBackend;
         use super_voice_shared::models::contexts::DictationContext;
@@ -812,30 +831,23 @@ mod tests {
         daemon
             .handle_set_active_context(Some("coding".to_string()))
             .await;
+        let none = std::collections::HashMap::new();
 
         let without = daemon
-            .backend_headers(&backend, &std::collections::HashMap::new())
+            .backend_headers(&backend, &transcription_model(source), &none)
             .await
             .expect("headers");
         assert!(
             !without
                 .iter()
                 .any(|(k, _)| k.ends_with("-prompt") || k.ends_with("-vocabulary")),
-            "no capability, no context headers: {without:?}"
+            "not declared, no context headers: {without:?}"
         );
 
-        let opted_in = DiscoveredBackend {
-            capabilities: super_voice_registry_types::manifest::Capabilities {
-                websocket: false,
-                product: super_voice_registry_types::manifest::VoiceCapabilities {
-                    context: true,
-                    ..Default::default()
-                },
-            },
-            ..backend
-        };
+        let mut declared = transcription_model(source);
+        declared.product.accepts_context = true;
         let with = daemon
-            .backend_headers(&opted_in, &std::collections::HashMap::new())
+            .backend_headers(&backend, &declared, &none)
             .await
             .expect("headers");
         let value = |name: &str| {
@@ -850,6 +862,57 @@ mod tests {
         for name in ["x-voice-vocabulary", "x-stt-vocabulary"] {
             assert_eq!(value(name), Some(r#"["kubectl"]"#), "{name}");
         }
+    }
+
+    /// A backend still declaring the deprecated `[capabilities] context` hands
+    /// the context to each of its speech-to-text models, as it did before the
+    /// models could say it themselves: the backends published with it keep
+    /// their context until they move.
+    #[tokio::test]
+    async fn the_deprecated_backend_flag_still_hands_every_model_the_context() {
+        use crate::daemon::test_fixtures::{openai_backend, transcription_model};
+        use crate::daemon::types::test_daemon;
+        use crate::stt_models::backends::DiscoveredBackend;
+        use super_voice_shared::models::contexts::DictationContext;
+
+        let daemon = test_daemon().await;
+        let source = "github.com/super-stt/openai";
+        let backend = DiscoveredBackend {
+            secrets: Vec::new(),
+            options: Vec::new(),
+            capabilities: super_voice_registry_types::manifest::Capabilities {
+                websocket: false,
+                product: super_voice_registry_types::manifest::VoiceCapabilities {
+                    context: true,
+                    ..Default::default()
+                },
+            },
+            ..openai_backend(source, Vec::new(), None)
+        };
+        daemon
+            .handle_set_context(DictationContext {
+                id: "coding".to_string(),
+                name: "Coding".to_string(),
+                prompt: "I dictate code.".to_string(),
+                vocabulary: Vec::new(),
+            })
+            .await;
+        daemon
+            .handle_set_active_context(Some("coding".to_string()))
+            .await;
+
+        let headers = daemon
+            .backend_headers(
+                &backend,
+                &transcription_model(source),
+                &std::collections::HashMap::new(),
+            )
+            .await
+            .expect("headers");
+        assert!(
+            headers.iter().any(|(k, _)| k == "x-voice-prompt"),
+            "{headers:?}"
+        );
     }
 
     /// Both headers must survive the round trip a backend actually makes:
@@ -874,13 +937,6 @@ mod tests {
         let backend = DiscoveredBackend {
             secrets: Vec::new(),
             options: Vec::new(),
-            capabilities: super_voice_registry_types::manifest::Capabilities {
-                websocket: false,
-                product: super_voice_registry_types::manifest::VoiceCapabilities {
-                    context: true,
-                    ..Default::default()
-                },
-            },
             ..openai_backend(source, Vec::new(), None)
         };
 
@@ -904,7 +960,11 @@ mod tests {
             .await;
 
         let headers = daemon
-            .backend_headers(&backend, &std::collections::HashMap::new())
+            .backend_headers(
+                &backend,
+                &crate::daemon::test_fixtures::context_model(source),
+                &std::collections::HashMap::new(),
+            )
             .await
             .expect("headers");
 
@@ -959,13 +1019,6 @@ mod tests {
         let backend = DiscoveredBackend {
             secrets: Vec::new(),
             options: Vec::new(),
-            capabilities: super_voice_registry_types::manifest::Capabilities {
-                websocket: false,
-                product: super_voice_registry_types::manifest::VoiceCapabilities {
-                    context: true,
-                    ..Default::default()
-                },
-            },
             ..openai_backend(source, Vec::new(), None)
         };
 
@@ -999,7 +1052,11 @@ mod tests {
             daemon.handle_set_active_context(Some(id.to_string())).await;
 
             let headers = daemon
-                .backend_headers(&backend, &std::collections::HashMap::new())
+                .backend_headers(
+                    &backend,
+                    &crate::daemon::test_fixtures::context_model(source),
+                    &std::collections::HashMap::new(),
+                )
                 .await
                 .expect("headers");
             assert_eq!(
