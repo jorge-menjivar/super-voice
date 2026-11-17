@@ -570,6 +570,7 @@ fn the_index_entry_sums_up_whether_a_backend_takes_a_context() {
                 product: super::VoiceIndexModel {
                     role: "transcription".to_string(),
                     accepts_context,
+                    clones_voices: false,
                 },
             })
             .collect()
@@ -589,6 +590,42 @@ fn the_index_entry_sums_up_whether_a_backend_takes_a_context() {
         !entry.product.accepts_context,
         "an index from before the field reads as taking no context"
     );
+}
+
+/// A synthesis model taking `voice:<uuid>` ids is marked in the index as
+/// cloning voices, and one taking only presets is not; the entry says its
+/// backend clones when any of its models does. An index from before the
+/// fields reads as cloning nothing.
+#[test]
+fn the_index_says_which_models_clone_voices() {
+    let preset = Manifest::parse(&with_model("")).expect("parses");
+    let cloning = Manifest::parse(&with_model(
+        "voice_kinds = [\"preset\", \"cloned\"]\nclone_ref_seconds = 12.0",
+    ))
+    .expect("parses");
+    let indexed = |m: &Manifest| IndexModel {
+        name: "m".to_string(),
+        provider: String::new(),
+        supported_devices: vec!["cpu".to_string()],
+        product: Voice::index_model(&m.capabilities.product, &m.models[0]),
+    };
+    assert!(!indexed(&preset).product.clones_voices);
+    assert!(indexed(&cloning).product.clones_voices);
+    assert!(!Voice::index_backend(&[indexed(&preset)]).clones_voices);
+    assert!(Voice::index_backend(&[indexed(&preset), indexed(&cloning)]).clones_voices);
+
+    let model: IndexModel =
+        serde_json::from_str(r#"{"name":"m","supported_devices":["cpu"],"role":"synthesis"}"#)
+            .expect("parses");
+    assert!(!model.product.clones_voices);
+    let entry: crate::index::IndexBackend = serde_json::from_value(serde_json::json!({
+        "id": "y", "source": "github.com/x/y", "version": "1.0.0", "tag": "v1.0.0",
+        "name": "Y", "kind": "wasm", "contract": "v4", "entrypoint": "y.wasm",
+        "online": false, "supports_gpu": false, "supports_cpu": true,
+        "models": [], "secrets": [], "options": [], "assets": {}
+    }))
+    .expect("an entry from before the field parses");
+    assert!(!entry.product.clones_voices);
 }
 
 /// One backend can serve both features.

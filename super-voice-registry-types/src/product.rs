@@ -321,6 +321,14 @@ impl VoiceModel {
     pub fn takes_context(&self, capabilities: &VoiceCapabilities) -> bool {
         !self.role.is_synthesis() && (self.accepts_context || capabilities.context)
     }
+
+    /// Whether the model speaks in a voice the user cloned: it takes
+    /// `voice:<uuid>` ids, with `cloned` in its `voice_kinds`. Only a synthesis
+    /// model may declare that.
+    #[must_use]
+    pub fn clones_voices(&self) -> bool {
+        self.voice_kinds.contains(&VoiceKind::Cloned)
+    }
 }
 
 /// What a model is for.
@@ -456,9 +464,10 @@ fn default_voice_kinds() -> Vec<VoiceKind> {
 }
 
 /// The per-model fields Super Voice's index carries beside `name` and
-/// `supported_devices`: the model's role, as its manifest spells it, and
-/// whether it is handed the user's dictation context, so a client can tell what
-/// a backend's models are for, and which take a context, before installing it.
+/// `supported_devices`: the model's role, as its manifest spells it, whether it
+/// is handed the user's dictation context, and whether it speaks in cloned
+/// voices, so a client can tell what a backend's models are for and what they
+/// can do before installing it.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceIndexModel {
@@ -472,6 +481,11 @@ pub struct VoiceIndexModel {
     /// published before the field existed has none, and is read as `false`.
     #[serde(default)]
     pub accepts_context: bool,
+    /// Whether the model speaks in a voice the user cloned: a synthesis model
+    /// with `cloned` in its `voice_kinds`. An index published before the field
+    /// existed has none, and is read as `false`.
+    #[serde(default)]
+    pub clones_voices: bool,
 }
 
 /// The backend-level fields Super Voice's index carries beside `online`,
@@ -486,6 +500,11 @@ pub struct VoiceIndexBackend {
     /// field existed has none, and is read as `false`.
     #[serde(default)]
     pub accepts_context: bool,
+    /// Whether any of the backend's models speaks in a voice the user cloned
+    /// ([`VoiceIndexModel::clones_voices`]). An index published before the
+    /// field existed has none, and is read as `false`.
+    #[serde(default)]
+    pub clones_voices: bool,
 }
 
 /// The index's role when an entry has none: [`ModelRole`]'s default, spelled,
@@ -688,12 +707,14 @@ impl Product for Voice {
         VoiceIndexModel {
             role: role.to_string(),
             accepts_context: model.product.takes_context(capabilities),
+            clones_voices: model.product.clones_voices(),
         }
     }
 
     fn index_backend(models: &[IndexModel<VoiceIndexModel>]) -> VoiceIndexBackend {
         VoiceIndexBackend {
             accepts_context: models.iter().any(|m| m.product.accepts_context),
+            clones_voices: models.iter().any(|m| m.product.clones_voices),
         }
     }
 }

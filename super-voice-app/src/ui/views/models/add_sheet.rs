@@ -10,8 +10,8 @@ use crate::ui::icons;
 use crate::ui::messages::{Message, ModelsPageMessage};
 
 use super::chips::{
-    CloudEgress, capability_chips, count_chip, entry_accepts_context, model_device_chips,
-    role_label,
+    CloudEgress, capability_chips, count_chip, entry_accepts_context, entry_clones_voices,
+    model_device_chips, role_label,
 };
 use super::surface::{card_divider, muted_text_color};
 
@@ -252,6 +252,7 @@ fn resolved_preview(
         b.supports_cpu,
         egress,
         entry_accepts_context(b),
+        entry_clones_voices(b),
         false,
     ) {
         col = col.push(chips);

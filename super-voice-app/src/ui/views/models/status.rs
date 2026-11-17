@@ -68,10 +68,12 @@ mod unmet_requirements_tests {
                 realtime: false,
                 role: "transcription".into(),
                 accepts_context: false,
+                clones_voices: false,
             }],
             secrets,
             options,
             accepts_context: false,
+            clones_voices: false,
         }
     }
 
@@ -390,6 +392,7 @@ mod model_status_tests {
                 realtime: false,
                 role: "transcription".into(),
                 accepts_context: false,
+                clones_voices: false,
             }],
             secrets: vec![BackendSecret {
                 name: "openai_api_key".to_string(),
@@ -399,6 +402,7 @@ mod model_status_tests {
             }],
             options: Vec::new(),
             accepts_context: false,
+            clones_voices: false,
         }
     }
 

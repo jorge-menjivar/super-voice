@@ -180,6 +180,7 @@ pub(super) fn stage_chips(
         compute.cpu,
         egress,
         stage_hears_context(stage, backend),
+        stage_clones_voices(stage, backend),
         true,
     );
     let count = app.stage_catalog.models(stage, &backend.source).len();
@@ -225,6 +226,27 @@ fn stage_hears_context(
         .models
         .iter()
         .any(|m| m.role == role && m.accepts_context)
+}
+
+/// Whether a backend in the catalog has a model that speaks in cloned voices,
+/// which earns its card the Voice Cloning chip. The index sums it up on the
+/// entry from its models. An index or a daemon from before the field says
+/// nothing, and reads as no.
+pub(super) fn entry_clones_voices(entry: &super_voice_shared::registry::RegistryBackend) -> bool {
+    entry.product.clones_voices
+}
+
+/// Whether a stage's backend offers it a model that speaks in cloned voices,
+/// which earns it the Voice Cloning chip there. Only text to speech's stage
+/// speaks, so a backend serving both features shows it there alone.
+///
+/// Any model, not only the stage's role: text to speech's own backend list
+/// does not say a model's role, and only a synthesis model may clone.
+fn stage_clones_voices(
+    stage: crate::state::Stage,
+    backend: &crate::daemon::backends::BackendInfo,
+) -> bool {
+    stage == crate::state::Stage::Synthesis && backend.models.iter().any(|m| m.clones_voices)
 }
 
 /// "1 model", "9 models", "1 post-processor": what a stage calls its models.
@@ -637,8 +659,9 @@ pub(super) fn cloud_chip(
 }
 
 /// The capability-chip row for a backend: GPU / CPU advertise local compute,
-/// Cloud (when `online` is `Some`) flags an online backend, and Contexts
-/// (when `context`) one that is handed the user's dictation context. Returns
+/// Cloud (when `online` is `Some`) flags an online backend, Contexts (when
+/// `context`) one that is handed the user's dictation context, and Voice
+/// Cloning (when `clones`) one that speaks in voices the user cloned. Returns
 /// `None` when there's nothing to advertise, so callers skip the row rather
 /// than render an empty band.
 ///
@@ -658,6 +681,7 @@ pub(super) fn capability_chips(
     supports_cpu: bool,
     online: Option<CloudEgress<'_>>,
     context: bool,
+    clones: bool,
     tooltips: bool,
 ) -> Option<Element<'static, Message>> {
     use super::surface::rounded_tooltip;
@@ -702,6 +726,18 @@ pub(super) fn capability_chips(
             rounded_tooltip(
                 chip,
                 text::body(crate::fl!("uses-your-dictation-context")),
+                widget::tooltip::Position::Top,
+            )
+        } else {
+            chip
+        });
+    }
+    if clones {
+        let chip = capability_chip(icons::USER_SOUND, crate::fl!("voice-cloning"), neutral);
+        chips.push(if tooltips {
+            rounded_tooltip(
+                chip,
+                text::body(crate::fl!("speaks-in-voices-you-clone")),
                 widget::tooltip::Position::Top,
             )
         } else {
@@ -931,11 +967,13 @@ mod capability_tests {
                     realtime: false,
                     role: "transcription".into(),
                     accepts_context: false,
+                    clones_voices: false,
                 })
                 .collect(),
             secrets: Vec::new(),
             options: Vec::new(),
             accepts_context: false,
+            clones_voices: false,
         }
     }
 
@@ -968,6 +1006,31 @@ mod capability_tests {
         b.models[0].accepts_context = true;
         b.accepts_context = true;
         assert!(!stage_hears_context(crate::state::Stage::Synthesis, &b));
+    }
+
+    /// The Voice Cloning chip shows on text to speech's stage for a backend
+    /// with a model that clones, and on no stage of speech to text's, even for
+    /// a backend that serves both features.
+    #[test]
+    fn the_voice_cloning_chip_shows_on_synthesis_only() {
+        use crate::state::Stage;
+        let mut b = backend_with_devices(&[&["cpu"], &["cpu"]]);
+        b.models[1].role = "synthesis".into();
+        assert!(!stage_clones_voices(Stage::Synthesis, &b));
+
+        b.models[1].clones_voices = true;
+        assert!(stage_clones_voices(Stage::Synthesis, &b));
+        assert!(!stage_clones_voices(Stage::Transcription, &b));
+        assert!(!stage_clones_voices(Stage::PostProcessing, &b));
+    }
+
+    /// Text to speech's own backend list does not say a model's role, so each
+    /// model there reads as transcribing: the chip must not hang on the role.
+    #[test]
+    fn the_voice_cloning_chip_reads_a_list_without_roles() {
+        let mut b = backend_with_devices(&[&["cpu"]]);
+        b.models[0].clones_voices = true;
+        assert!(stage_clones_voices(crate::state::Stage::Synthesis, &b));
     }
 
     /// Both GPU backends (`cuda`, `metal`) surface the GPU chip, including
@@ -1207,6 +1270,16 @@ mod update_offer_tests {
         assert!(!entry_accepts_context(&e));
         e.product.accepts_context = true;
         assert!(entry_accepts_context(&e));
+    }
+
+    /// A catalog entry gets the Voice Cloning chip from what the index sums up
+    /// on it, and not without.
+    #[test]
+    fn a_catalog_entry_clones_voices_when_the_index_says_so() {
+        let mut e = entry(None, "1.0.0");
+        assert!(!super::entry_clones_voices(&e));
+        e.product.clones_voices = true;
+        assert!(super::entry_clones_voices(&e));
     }
 
     #[test]

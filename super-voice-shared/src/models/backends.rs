@@ -85,11 +85,23 @@ pub struct BackendInfo {
     /// daemon would do anyway, since it sends the headers to nobody.
     #[serde(default)]
     pub accepts_context: bool,
+    /// Whether any of this backend's models speaks in a voice the user cloned:
+    /// the sum of the models' [`clones_voices`](BackendModel::clones_voices),
+    /// as the registry index sums them up on its entry.
+    ///
+    /// `default` so a payload from a daemon older than the field still
+    /// deserializes, reading as "clones none".
+    #[serde(default)]
+    pub clones_voices: bool,
 }
 
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 /// One model served by a backend.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "a wire shape: each flag is one thing a client reads about the model"
+)]
 pub struct BackendModel {
     pub name: String,
     /// Compatibility shim, mirroring [`IndexModel::provider`]. Always an empty
@@ -155,6 +167,14 @@ pub struct BackendModel {
     /// deserializes, reading as "takes none".
     #[serde(default)]
     pub accepts_context: bool,
+    /// Whether the model speaks in a voice the user cloned: a synthesis model
+    /// with `cloned` in its `voice_kinds`, which takes the `voice:<uuid>` ids
+    /// of the [voice library](crate::tts::models::voices).
+    ///
+    /// `default` so a payload from a daemon older than the field still
+    /// deserializes, reading as "clones none".
+    #[serde(default)]
+    pub clones_voices: bool,
 }
 
 /// The role a catalog entry without the key is read as.
@@ -314,6 +334,7 @@ mod tests {
             realtime: false,
             role: "transcription".into(),
             accepts_context: false,
+            clones_voices: false,
         };
         let v = serde_json::to_value(&m).expect("serializes");
         assert!(

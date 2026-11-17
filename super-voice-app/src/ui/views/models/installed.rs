@@ -209,6 +209,7 @@ pub(super) fn installed_card<'a>(
         backend_supports_cpu(backend),
         egress,
         backend.accepts_context,
+        backend.clones_voices,
         // Suppress chip tooltips while this card's overflow menu is open, so the
         // menu paints cleanly on top instead of a tooltip showing half-behind it.
         !menu_open,

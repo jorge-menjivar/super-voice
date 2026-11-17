@@ -87,6 +87,7 @@ mod tests {
             realtime: false,
             role: "transcription".into(),
             accepts_context: false,
+            clones_voices: false,
         }
     }
 
@@ -103,6 +104,7 @@ mod tests {
             secrets: Vec::new(),
             options: Vec::new(),
             accepts_context: false,
+            clones_voices: false,
         }
     }
 

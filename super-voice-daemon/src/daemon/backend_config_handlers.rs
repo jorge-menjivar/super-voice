@@ -116,6 +116,7 @@ impl SuperSTTDaemon {
                         realtime: m.realtime,
                         role: m.product.role.to_string(),
                         accepts_context: m.product.takes_context(&b.capabilities.product),
+                        clones_voices: m.product.clones_voices(),
                     })
                     .collect::<Vec<_>>();
                 let secrets = b
@@ -154,6 +155,7 @@ impl SuperSTTDaemon {
                     .collect();
                 // The sum of the models, as the registry index sums them up.
                 let accepts_context = models.iter().any(|m| m.accepts_context);
+                let clones_voices = models.iter().any(|m| m.clones_voices);
                 BackendInfo {
                     source: b.source.clone(),
                     name: b.name.clone(),
@@ -186,6 +188,7 @@ impl SuperSTTDaemon {
                     secrets,
                     options,
                     accepts_context,
+                    clones_voices,
                 }
             })
             .collect();

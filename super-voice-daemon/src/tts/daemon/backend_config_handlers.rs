@@ -57,8 +57,9 @@ impl SuperTTSDaemon {
                         supported_languages: m.supported_languages.clone(),
                         primary_language: m.primary_language.clone(),
                         realtime: m.realtime,
+                        clones_voices: m.product.clones_voices(),
                     })
-                    .collect();
+                    .collect::<Vec<_>>();
                 let secrets = b
                     .secrets
                     .iter()
@@ -93,6 +94,8 @@ impl SuperTTSDaemon {
                         }
                     })
                     .collect();
+                // The sum of the models, as the registry index sums them up.
+                let clones_voices = models.iter().any(|m| m.clones_voices);
                 BackendInfo {
                     source: b.source.clone(),
                     name: b.name.clone(),
@@ -124,6 +127,7 @@ impl SuperTTSDaemon {
                     models,
                     secrets,
                     options,
+                    clones_voices,
                 }
             })
             .collect();

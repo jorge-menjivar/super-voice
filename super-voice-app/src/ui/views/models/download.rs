@@ -11,8 +11,8 @@ use crate::ui::messages::{Message, ModelsPageMessage, ShellMessage};
 
 use super::active::backend_glyph_tile;
 use super::chips::{
-    CloudEgress, capability_chips, entry_accepts_context, models_inventory, result_count,
-    role_groups,
+    CloudEgress, capability_chips, entry_accepts_context, entry_clones_voices, models_inventory,
+    result_count, role_groups,
 };
 use super::surface::{
     card_divider, card_facts, card_surface, card_title_block, muted_text_color, repo_button,
@@ -314,6 +314,7 @@ pub(super) fn download_card<'a>(
         entry.supports_cpu,
         egress,
         entry_accepts_context(entry),
+        entry_clones_voices(entry),
         true,
     );
     let groups = role_groups(
