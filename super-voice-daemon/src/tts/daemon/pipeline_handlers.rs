@@ -20,10 +20,12 @@
 //! implementation of "select a backend for synthesis", not two that can come to
 //! disagree about what counts as selected.
 
+use crate::daemon::pipeline_handlers::model_state;
 use crate::tts::daemon::types::SuperTTSDaemon;
+use super_engine_daemon::stage::StageExt;
 use super_voice_shared::tts::models::protocol::{
-    DaemonResponse, SYNTHESIS_STAGE, StageModelReport, StageReport, StageRole, StageSwitch,
-    SwitchDownload, SwitchTarget,
+    DaemonResponse, ModelState, SYNTHESIS_STAGE, StageModelReport, StageReport, StageRole,
+    StageSwitch, SwitchDownload, SwitchTarget,
 };
 
 impl SuperTTSDaemon {
@@ -90,6 +92,7 @@ impl SuperTTSDaemon {
                 stage: SYNTHESIS_STAGE,
                 model: None,
                 loaded: false,
+                state: ModelState::NotLoaded,
                 device: None,
                 // Still reported: the very first load of a fresh install is in
                 // flight before anything has been selected, and a client with
@@ -102,10 +105,13 @@ impl SuperTTSDaemon {
         let device = self
             .model_device_view(&source, &model, running.clone())
             .await;
+        let loaded = running.is_some();
+        let on_demand = !loaded && self.stage().loads_on_demand().await;
         StageModelReport {
             stage: SYNTHESIS_STAGE,
             model: Some(model),
-            loaded: running.is_some(),
+            loaded,
+            state: model_state(loaded, on_demand),
             device: Some(device),
             switch: self.stage_switch().await,
         }

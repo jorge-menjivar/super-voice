@@ -35,6 +35,8 @@ pub const fn default_stage() -> u32 {
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::models::protocol::ModelState;
+
 /// What a stage does to the utterance passing through it.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -94,6 +96,10 @@ pub struct StageModelReport {
     pub model: Option<String>,
     /// Whether that model is loaded and ready to synthesize.
     pub loaded: bool,
+    /// Where that model stands: `loaded`, `idle` (out of memory until its next
+    /// use loads it), or `not_loaded`. `loaded` is true exactly when this is.
+    /// The same type as speech to text's, since both load the same way.
+    pub state: ModelState,
     /// The accelerator the selection runs on; `null` when nothing is selected.
     ///
     /// What it *could* run on is `GET /tts/pipeline/{stage}/model/{model}/device/list`,
@@ -167,8 +173,8 @@ pub struct SwitchDownload {
 #[cfg(test)]
 mod tests {
     use super::{
-        SYNTHESIS_STAGE, StageModelDevice, StageModelReport, StageReport, StageRole, StageSwitch,
-        SwitchDownload, SwitchTarget,
+        ModelState, SYNTHESIS_STAGE, StageModelDevice, StageModelReport, StageReport, StageRole,
+        StageSwitch, SwitchDownload, SwitchTarget,
     };
 
     fn empty_stage() -> StageReport {
@@ -186,6 +192,7 @@ mod tests {
             stage: SYNTHESIS_STAGE,
             model: None,
             loaded: false,
+            state: ModelState::NotLoaded,
             device: None,
             switch: None,
         }
@@ -328,6 +335,7 @@ mod tests {
             stage: SYNTHESIS_STAGE,
             model: Some("kokoro-82m".to_string()),
             loaded: false,
+            state: ModelState::NotLoaded,
             device: Some(StageModelDevice {
                 preference: "cpu".to_string(),
                 resolved_accel: Some("cpu".to_string()),

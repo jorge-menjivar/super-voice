@@ -36,6 +36,11 @@ user picking it a second time. `loaded` is what says whether it is up. The two a
 separate at every stage; stage 1 collapsed them into one until the stages were made \
 to behave alike.
 
+`state` says where the model stands: `loaded`, `idle` (out of memory, and the next \
+request that needs it loads it: idle unload is on and the stage is on with a model \
+selected), or `not_loaded` (nothing loads it until a load). A client shows an `idle` \
+stage as ready.
+
 `device` carries the stored preference and what it resolved to, which is all a \
 picker needs to render its current value. What the model *could* run on is \
 `GET /stt/pipeline/{stage}/model/{model}/device/list`, kept separate because that answer \

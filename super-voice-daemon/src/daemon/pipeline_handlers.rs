@@ -20,10 +20,11 @@
 //! its own endpoint always used, so there is one implementation of "select a
 //! backend" per stage, not two.
 
+use super_engine_daemon::stage::StageExt;
 use super_voice_registry_types::manifest::Device;
 use super_voice_shared::models::protocol::{
-    DaemonResponse, POST_PROCESSOR_STAGE, StageModelDevice, StageModelReport, StageReport,
-    StageRole, StageSwitch, SwitchDownload, SwitchTarget, TRANSCRIPTION_STAGE,
+    DaemonResponse, ModelState, POST_PROCESSOR_STAGE, StageModelDevice, StageModelReport,
+    StageReport, StageRole, StageSwitch, SwitchDownload, SwitchTarget, TRANSCRIPTION_STAGE,
 };
 
 use crate::daemon::device_management::PipelineStage;
@@ -140,11 +141,13 @@ impl SuperSTTDaemon {
             }
             None => (None, None, false),
         };
+        let on_demand = !loaded && self.stage(stage).loads_on_demand().await;
 
         StageModelReport {
             stage: stage.position(),
             model,
             loaded,
+            state: model_state(loaded, on_demand),
             device,
             switch: self.stage_switch(stage),
         }
@@ -276,5 +279,23 @@ impl SuperSTTDaemon {
             .iter()
             .find(|b| b.source == source)
             .map(|b| b.name.clone())
+    }
+}
+
+/// Where a stage's selected model stands, for its model slot: `loaded` when
+/// it is in memory, else `idle` when the next request loads it, else
+/// `not_loaded`.
+///
+/// Whether the next request loads it is the engine's
+/// [`StageExt::loads_on_demand`], the rule every load on demand follows, so
+/// what the slot says cannot drift from what a request does. Shared with text
+/// to speech's slot.
+pub(crate) const fn model_state(loaded: bool, loads_on_demand: bool) -> ModelState {
+    if loaded {
+        ModelState::Loaded
+    } else if loads_on_demand {
+        ModelState::Idle
+    } else {
+        ModelState::NotLoaded
     }
 }

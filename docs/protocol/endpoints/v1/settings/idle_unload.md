@@ -24,8 +24,9 @@ With a value set:
 - A model unused for that long is unloaded and stays selected. A recording or
   an utterance in progress counts as use of every stage it runs, and the time
   is counted from when it ends. The unload is reported as a `ready` event with
-  `model_loaded: false` on [`daemon_status_changed`](../events.md), carrying
-  the stage it is about.
+  `model_loaded: false` and `model_state: "idle"` on
+  [`daemon_status_changed`](../events.md), carrying the stage it is about. An
+  explicit unload's `ready` carries `model_state: "not_loaded"` instead.
 
 One value covers every stage of both features: transcription,
 post-processing and synthesis.

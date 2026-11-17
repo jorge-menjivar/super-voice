@@ -17,6 +17,7 @@ impl AppModel {
         match message {
             ModelMessage::LoadInitialData => self.handle_model_load_commands(),
             ModelMessage::CurrentModelLoaded { .. }
+            | ModelMessage::IdleRead { .. }
             | ModelMessage::ModelChanged { .. }
             | ModelMessage::CurrentModelFetchFailed { .. } => self.handle_model_results(message),
         }
@@ -75,6 +76,7 @@ impl AppModel {
             ModelMessage::CurrentModelLoaded {
                 model,
                 source,
+                idle,
                 epoch,
             } => {
                 // Discard a stale snapshot: a live `model_switched` advanced the
@@ -85,10 +87,18 @@ impl AppModel {
                 }
                 self.current_model.clone_from(&model);
                 self.current_source.clone_from(&source);
+                self.transcription_idle = idle;
                 self.model_operations.set_ready(Stage::Transcription);
                 // Fetch the per-model language block now that a model is loaded.
                 // Wire point 1: model loaded (CurrentModelLoaded).
                 self.load_model_language(Stage::Transcription, &source, model)
+            }
+
+            ModelMessage::IdleRead { idle, epoch } => {
+                if epoch == self.current_model_epoch {
+                    self.transcription_idle = idle;
+                }
+                Task::none()
             }
 
             ModelMessage::ModelChanged { model, source } => {
@@ -98,6 +108,7 @@ impl AppModel {
                 self.current_model_epoch = self.current_model_epoch.wrapping_add(1);
                 self.current_model.clone_from(&model);
                 self.current_source.clone_from(&source);
+                self.transcription_idle = None;
                 self.model_operations.set_ready(Stage::Transcription);
                 // Fetch the per-model language block now that a model is loaded.
                 // Wire point 1: model loaded (ModelChanged).
@@ -164,6 +175,7 @@ impl AppModel {
                     // it was pointed at through an unload, and reporting that as
                     // the current model would tell the Recording page a model is up
                     // when none is.
+                    let idle = idle_selection(&stage);
                     let (model, source) = match stage.model.filter(|_| stage.loaded) {
                         Some(model) => (model, stage.source.unwrap_or_default()),
                         None => (String::new(), String::new()),
@@ -171,6 +183,7 @@ impl AppModel {
                     cosmic::Action::App(Message::Model(ModelMessage::CurrentModelLoaded {
                         model,
                         source,
+                        idle,
                         epoch,
                     }))
                 }
@@ -183,6 +196,80 @@ impl AppModel {
             },
         )
     }
+}
+
+impl AppModel {
+    /// Whether stage 1's model is idle, from the `ready` that says it left
+    /// memory: `was` is the model it had, when the app knew it. An idle model
+    /// is the one that was loaded, so only one the app did not know (a load
+    /// that failed, say) is read back.
+    pub(in crate::core::app) fn take_transcription_idle(
+        &mut self,
+        state: crate::daemon::client::ModelState,
+        was: Option<(String, String)>,
+    ) -> Option<Task<cosmic::Action<Message>>> {
+        match idle_after_ready(state, was) {
+            IdleAfterReady::Known(idle) => {
+                self.transcription_idle = idle;
+                None
+            }
+            IdleAfterReady::Unknown => Some(self.read_transcription_idle()),
+        }
+    }
+
+    /// Re-read whether the daemon reports stage 1's model idle: when idle
+    /// unload is turned on or off, and when a `ready` says it is idle without
+    /// the app knowing which model.
+    ///
+    /// Tagged with the epoch, as [`Self::fetch_current_model`] is, so a load
+    /// that lands first wins over this read.
+    pub(in crate::core::app) fn read_transcription_idle(&self) -> Task<cosmic::Action<Message>> {
+        let epoch = self.current_model_epoch;
+        Task::perform(
+            get_stage_view(Stage::Transcription),
+            move |result| match result {
+                Ok(stage) => cosmic::Action::App(Message::Model(ModelMessage::IdleRead {
+                    idle: idle_selection(&stage),
+                    epoch,
+                })),
+                Err(e) => {
+                    warn!("Could not read whether stage 1's model is idle: {e}");
+                    cosmic::Action::None
+                }
+            },
+        )
+    }
+}
+
+/// Stage 1's idle model after a `ready` saying its model left memory.
+#[derive(Debug, PartialEq, Eq)]
+enum IdleAfterReady {
+    /// The idle model, or `None` when the model is not idle.
+    Known(Option<(String, String)>),
+    /// Idle, but the app did not know which model was loaded: read it back.
+    Unknown,
+}
+
+/// [`AppModel::take_transcription_idle`]'s rule: an idle model is the one
+/// that was loaded, `was`, when the app knew it.
+fn idle_after_ready(
+    state: crate::daemon::client::ModelState,
+    was: Option<(String, String)>,
+) -> IdleAfterReady {
+    if state != crate::daemon::client::ModelState::Idle {
+        return IdleAfterReady::Known(None);
+    }
+    was.map_or(IdleAfterReady::Unknown, |model| {
+        IdleAfterReady::Known(Some(model))
+    })
+}
+
+/// Stage 1's `(model, source)` when the daemon reports that model idle.
+fn idle_selection(stage: &crate::daemon::client::StageState) -> Option<(String, String)> {
+    if stage.state != crate::daemon::client::ModelState::Idle {
+        return None;
+    }
+    Some((stage.model.clone()?, stage.source.clone()?))
 }
 
 /// Collapse the user's home directory back to `$HOME` in an error message and
@@ -199,7 +286,44 @@ pub(in crate::core::app) fn sanitize_home(err: &str, home: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_home;
+    use super::{IdleAfterReady, idle_after_ready, sanitize_home};
+    use crate::daemon::client::ModelState;
+
+    fn whisper() -> Option<(String, String)> {
+        Some((
+            "whisper-tiny".to_string(),
+            "github.com/x/whisper".to_string(),
+        ))
+    }
+
+    /// An idle unload leaves idle the model that was loaded, which the app
+    /// knew, so nothing is read back.
+    #[test]
+    fn an_idle_unload_keeps_the_model_that_was_loaded() {
+        assert_eq!(
+            idle_after_ready(ModelState::Idle, whisper()),
+            IdleAfterReady::Known(whisper())
+        );
+    }
+
+    /// An unload leaves nothing idle, whatever was loaded.
+    #[test]
+    fn an_unload_leaves_nothing_idle() {
+        assert_eq!(
+            idle_after_ready(ModelState::NotLoaded, whisper()),
+            IdleAfterReady::Known(None)
+        );
+    }
+
+    /// Idle with no model the app knew of, as after a load on demand that
+    /// failed: the stage is read back for which.
+    #[test]
+    fn an_idle_model_the_app_did_not_know_is_read_back() {
+        assert_eq!(
+            idle_after_ready(ModelState::Idle, None),
+            IdleAfterReady::Unknown
+        );
+    }
 
     #[test]
     fn empty_home_leaves_message_intact() {

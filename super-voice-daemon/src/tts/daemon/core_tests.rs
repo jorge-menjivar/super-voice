@@ -1050,6 +1050,7 @@ async fn broadcast_model_active_carries_full_identity() {
     let (_topic, ready) = rx.recv_json().await.expect("ready event");
     assert_eq!(ready["status"], "ready");
     assert_eq!(ready["model_loaded"], true);
+    assert_eq!(ready["model_state"], "loaded");
     assert_eq!(ready["model_name"], "piper-mini");
 }
 
@@ -2135,6 +2136,79 @@ async fn idle_unload_frees_the_model_and_keeps_it_selected() {
         daemon.config.read().await.synthesis.preferred_model,
         "kokoro-1"
     );
+}
+
+/// The model slot says where the model stands: `idle` while it is out of
+/// memory and the next speak loads it, `loaded` while it is up, and
+/// `not_loaded` when nothing would load it: no model selected, or idle unload
+/// off.
+#[tokio::test]
+async fn the_model_slot_says_whether_the_model_is_idle() {
+    use super_voice_shared::tts::models::protocol::ModelState;
+    let daemon = test_daemon().await;
+    let source = "github.com/super-tts/kokoro";
+    *daemon.backends.write().await = vec![fixture_backend_local(
+        "kokoro",
+        source,
+        "Kokoro",
+        "kokoro-tiny",
+    )];
+    daemon.config.write().await.idle_unload.after_secs = 300;
+    assert_eq!(
+        daemon.stage_model().await.state,
+        ModelState::NotLoaded,
+        "nothing selected"
+    );
+
+    daemon
+        .config
+        .write()
+        .await
+        .update_synthesis_model("kokoro-tiny".into(), source.into());
+    assert_eq!(daemon.stage_model().await.state, ModelState::Idle);
+
+    daemon.config.write().await.idle_unload.after_secs = 0;
+    assert_eq!(
+        daemon.stage_model().await.state,
+        ModelState::NotLoaded,
+        "idle unload off"
+    );
+
+    seed_loaded_model(&daemon, "kokoro-tiny", source).await;
+    let slot = daemon.stage_model().await;
+    assert!(slot.loaded);
+    assert_eq!(slot.state, ModelState::Loaded);
+}
+
+/// The `ready` that says the stage emptied after an idle unload says the
+/// model is idle: the next speak loads it.
+#[tokio::test]
+async fn an_idle_unload_says_the_model_is_idle() {
+    use crate::tts::daemon::events::Topic;
+    use std::time::Duration;
+    let daemon = test_daemon().await;
+    let source = "github.com/super-tts/kokoro";
+    *daemon.backends.write().await = vec![fixture_backend_local(
+        "kokoro",
+        source,
+        "Kokoro",
+        "kokoro-tiny",
+    )];
+    seed_loaded_model(&daemon, "kokoro-tiny", source).await;
+    {
+        let mut config = daemon.config.write().await;
+        config.update_synthesis_model("kokoro-tiny".into(), source.into());
+        config.idle_unload.after_secs = 30;
+    }
+    let mut rx = daemon.events.subscribe(Topic::DaemonStatusChanged);
+
+    daemon.model.backdate(Duration::from_secs(60));
+    assert!(daemon.stage().unload_if_idle(Duration::from_secs(30)).await);
+
+    let (_topic, ready) = rx.recv_json().await.expect("ready event");
+    assert_eq!(ready["status"], "ready");
+    assert_eq!(ready["model_loaded"], false);
+    assert_eq!(ready["model_state"], "idle");
 }
 
 /// Text that cannot be spoken is refused before a model is loaded for it, so

@@ -99,6 +99,10 @@ pub struct AppModel {
     /// discarded on arrival if the counter has since advanced — so a slow,
     /// stale reconnect query can never clobber a fresher live event.
     pub current_model_epoch: u64,
+    /// Stage 1's `(model, source)` while the daemon reports that model idle:
+    /// out of memory until its next use loads it; `None` otherwise. Read with
+    /// the same snapshots as the loaded model, under the same epoch.
+    pub transcription_idle: Option<(String, String)>,
     /// What each pipeline stage has in flight: a download, a load, a failure,
     /// or nothing. Per stage because the stages provision independently, so
     /// one stage's work must neither render on another's card nor keep its

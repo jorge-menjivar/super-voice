@@ -408,6 +408,7 @@ fn a_response_carries_the_stage_model_slot_only_when_set() {
             stage: SYNTHESIS_STAGE,
             model: Some("kokoro-82m".to_string()),
             loaded: false,
+            state: super::ModelState::NotLoaded,
             device: Some(StageModelDevice {
                 preference: "gpu".to_string(),
                 resolved_accel: None,

@@ -275,6 +275,17 @@ pub(super) fn card_facts<'a>(
     Some(facts.into())
 }
 
+/// The mark at the foot of a card whose model is out of memory until its next
+/// use: "Idle", in the card's bottom-right corner.
+pub(super) fn idle_label<'a>() -> Element<'a, Message> {
+    widget::container(
+        text::caption(crate::fl!("idle")).class(cosmic::theme::Text::Color(muted_text_color())),
+    )
+    .width(Length::Fill)
+    .align_x(cosmic::iced::alignment::Horizontal::Right)
+    .into()
+}
+
 /// The de-emphasized color for a card's secondary line (the repo id): the
 /// container's text color dimmed so the technical `source` reads as a caption
 /// rather than competing with the backend name.

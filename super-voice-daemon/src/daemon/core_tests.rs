@@ -2106,6 +2106,7 @@ async fn broadcast_model_active_carries_full_identity() {
     let (_topic, ready) = rx.recv_json().await.expect("ready event");
     assert_eq!(ready["status"], "ready");
     assert_eq!(ready["model_loaded"], true);
+    assert_eq!(ready["model_state"], "loaded");
     assert_eq!(ready["model_name"], "voxtral-mini");
 }
 
@@ -3102,6 +3103,94 @@ async fn idle_unload_frees_the_model_and_keeps_it_selected() {
 
     assert!(daemon.model.read().await.is_none());
     assert!(daemon.config.read().await.transcription.is_active());
+}
+
+/// The model slot says where the model stands: `loaded` while it is up, `idle`
+/// once an idle unload frees it, since the next request loads it, and
+/// `not_loaded` when nothing would load it: idle unload off, or the stage
+/// switched off by an Unload.
+#[tokio::test]
+async fn the_model_slot_says_whether_the_model_is_idle() {
+    use crate::daemon::device_management::PipelineStage;
+    use std::time::Duration;
+    use super_voice_shared::models::protocol::ModelState;
+    let daemon = test_daemon().await;
+    let source = "github.com/super-stt/whisper";
+    *daemon.backends.write().await =
+        vec![fixture_backend_local("whisper", source, "Whisper", "small")];
+    let _ = daemon.handle_set_active_backend(source.to_string()).await;
+    seed_loaded_model(&daemon, "small", source).await;
+    {
+        let mut config = daemon.config.write().await;
+        config.update_preferred_model("small".to_string(), source.to_string());
+        config.idle_unload.after_secs = 30;
+    }
+    let state = async || {
+        daemon
+            .handle_get_stage_model(PipelineStage::Transcription)
+            .await
+            .stage_model
+            .expect("a model slot")
+            .state
+    };
+    assert_eq!(state().await, ModelState::Loaded);
+
+    daemon.model.backdate(Duration::from_secs(60));
+    assert!(
+        daemon
+            .stage(PipelineStage::Transcription)
+            .unload_if_idle(Duration::from_secs(30))
+            .await
+    );
+    assert_eq!(state().await, ModelState::Idle);
+
+    daemon.config.write().await.idle_unload.after_secs = 0;
+    assert_eq!(state().await, ModelState::NotLoaded, "idle unload off");
+
+    daemon.config.write().await.idle_unload.after_secs = 30;
+    let response = daemon.handle_unload_active_model().await;
+    assert_eq!(response.status, "success", "{:?}", response.message);
+    assert_eq!(state().await, ModelState::NotLoaded, "switched off");
+}
+
+/// The `ready` that says a stage emptied says whether its model is idle, so
+/// a client need not read the stage back: `idle` after an idle unload, since
+/// the next request loads the model, and `not_loaded` after an Unload.
+#[tokio::test]
+async fn the_ready_event_says_whether_the_model_is_idle() {
+    use crate::daemon::device_management::PipelineStage;
+    use crate::daemon::events::Topic;
+    use std::time::Duration;
+    let daemon = test_daemon().await;
+    let source = "github.com/super-stt/whisper";
+    *daemon.backends.write().await =
+        vec![fixture_backend_local("whisper", source, "Whisper", "small")];
+    let _ = daemon.handle_set_active_backend(source.to_string()).await;
+    seed_loaded_model(&daemon, "small", source).await;
+    {
+        let mut config = daemon.config.write().await;
+        config.update_preferred_model("small".to_string(), source.to_string());
+        config.idle_unload.after_secs = 30;
+    }
+    let mut rx = daemon.events.subscribe(Topic::DaemonStatusChanged);
+
+    daemon.model.backdate(Duration::from_secs(60));
+    assert!(
+        daemon
+            .stage(PipelineStage::Transcription)
+            .unload_if_idle(Duration::from_secs(30))
+            .await
+    );
+    let (_topic, ready) = rx.recv_json().await.expect("ready event");
+    assert_eq!(ready["status"], "ready");
+    assert_eq!(ready["model_loaded"], false);
+    assert_eq!(ready["model_state"], "idle");
+
+    let response = daemon.handle_unload_active_model().await;
+    assert_eq!(response.status, "success", "{:?}", response.message);
+    let (_topic, ready) = rx.recv_json().await.expect("ready event");
+    assert_eq!(ready["status"], "ready");
+    assert_eq!(ready["model_state"], "not_loaded");
 }
 
 /// A model used within the idle time stays, and so does one a recording is

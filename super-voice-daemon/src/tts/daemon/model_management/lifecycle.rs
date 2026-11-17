@@ -2,7 +2,7 @@
 use crate::tts::daemon::types::{LoadedModel, SuperTTSDaemon};
 use log::{info, warn};
 use super_engine_daemon::stage::{Load, StageExt, Unload};
-use super_voice_shared::tts::models::protocol::{DaemonResponse, DaemonStatusEvent};
+use super_voice_shared::tts::models::protocol::{DaemonResponse, DaemonStatusEvent, ModelState};
 
 impl SuperTTSDaemon {
     /// Re-instantiate the currently-loaded model in place (same identity) so a
@@ -47,6 +47,7 @@ impl SuperTTSDaemon {
         self.events
             .publish_synthesis_status(DaemonStatusEvent::Ready {
                 model_loaded: true,
+                model_state: ModelState::Loaded,
                 model_name: Some(name.to_string()),
                 actual_device: Some(actual_device.to_string()),
                 preferred_device: None,

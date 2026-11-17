@@ -133,6 +133,7 @@ impl FromDaemon for StageModelEnvelope {
                 stage: super_voice_shared::tts::models::protocol::SYNTHESIS_STAGE,
                 model: None,
                 loaded: false,
+                state: super_voice_shared::tts::models::protocol::ModelState::NotLoaded,
                 device: None,
                 switch: None,
             }),
