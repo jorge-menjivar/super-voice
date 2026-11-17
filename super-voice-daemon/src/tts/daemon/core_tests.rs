@@ -2277,6 +2277,47 @@ async fn speak_without_a_chosen_voice_is_refused_before_loading() {
     );
 }
 
+/// Deleting a cloned voice forgets it wherever a model was set to it, and says
+/// so, so the model is back to having no voice chosen rather than naming one
+/// that is gone. Other models' choices are left alone.
+#[tokio::test]
+async fn a_deleted_voice_is_no_models_voice_any_more() {
+    let daemon = test_daemon().await;
+    let gone = "voice:0f8fad5b-d9cb-469f-a165-70867728950e";
+    let kept = "voice:6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+    {
+        let mut config = daemon.config.write().await;
+        config.update_model_voice("github.com/a/qwen".into(), "base".into(), Some(gone.into()));
+        config.update_model_voice(
+            "github.com/b/other".into(),
+            "base".into(),
+            Some(kept.into()),
+        );
+    }
+    let mut rx = daemon
+        .events
+        .subscribe(crate::tts::daemon::events::Topic::DaemonStatusChanged);
+
+    daemon.forget_deleted_voice(gone).await;
+
+    {
+        let config = daemon.config.read().await;
+        assert_eq!(config.model_voice("github.com/a/qwen", "base"), None);
+        assert_eq!(config.model_voice("github.com/b/other", "base"), Some(kept));
+    }
+    let (_topic, event) = rx.recv_json().await.expect("an announcement");
+    assert_eq!(event["status"], "settings_changed");
+    assert_eq!(event["setting"], "voice");
+
+    // A voice no model was set to changes nothing, and says nothing.
+    daemon.forget_deleted_voice(gone).await;
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv_json())
+            .await
+            .is_err()
+    );
+}
+
 /// A model with presets speaks without a chosen voice, in its own default, so
 /// it is never refused on that account.
 #[tokio::test]

@@ -168,6 +168,23 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         self.model_voice_response(&source, &model).await
     }
 
+    /// Forget `voice_id` as any model's voice, now that it has been deleted
+    /// from the library. A model left naming it went on reporting it as the
+    /// voice in effect, so its Synthesis card offered nothing to pick and gave
+    /// no warning, and every utterance was refused as `unknown_voice`. Without
+    /// it the model is back to its `default_voice`, or to none, which speaking
+    /// reports as `voice_required` and the card as a voice still to choose.
+    pub(crate) async fn forget_deleted_voice(&self, voice_id: &str) {
+        if !self.config.write().await.forget_model_voice(voice_id) {
+            return;
+        }
+        if let Err(e) = self.persist_config().await {
+            log::warn!("Failed to persist config after forgetting a deleted voice: {e}");
+        }
+        log::info!("{voice_id} was deleted, so no model speaks in it any more");
+        self.publish_settings_changed("voice");
+    }
+
     /// The block as a response, with the one error it can produce.
     async fn model_voice_response(&self, source: &str, model: &str) -> DaemonResponse {
         match self.model_voice_block(source, model).await {

@@ -397,6 +397,7 @@ pub(crate) async fn delete_voice(State(s): State<AppState>, Path(id): Path<Strin
         return error(&e);
     }
     s.daemon.publish_settings_changed("voices");
+    s.daemon.forget_deleted_voice(&voice.voice_id()).await;
     release_from_loaded_model(&s, &voice.voice_id()).await;
     ok(&VoiceDeletedResponse {
         status: "success".into(),

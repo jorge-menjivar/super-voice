@@ -175,6 +175,11 @@ Forget the voice and its recording.
 { "status": "success", "deleted": "voice:2f8a2d0e-…" }
 ```
 
+A model set to speak in the voice
+([`/tts/pipeline/{stage}/model/{model}/voice`](./pipeline/voice.md)) is set to
+it no longer: it is back to its `default_voice`, or to none, and the change is
+announced as `settings_changed` for `voice`.
+
 If the model loaded at the time holds the voice, the daemon also asks the
 backend to release it. That release is best-effort: the registration lives in
 the backend's memory and dies with the instance, so a failure costs a little
