@@ -176,9 +176,18 @@ impl UpdateState {
     ///
     /// Not asked while a run is in flight (the run owns the page) or while a
     /// check is already going.
+    ///
+    /// Nor when the daemon does not check on its own: with Check Daily off
+    /// there is no deferred check to get ahead of, and asking anyway reached
+    /// GitHub the moment the Updates page opened, from a user who had said
+    /// not to. **Check now** is their way to ask. Nor before the setting has
+    /// loaded; [`UpdateMessage::AutoCheckLoaded`] asks again when it does.
+    ///
+    /// [`UpdateMessage::AutoCheckLoaded`]: crate::ui::messages::UpdateMessage::AutoCheckLoaded
     #[must_use]
     pub fn wants_first_check(&self) -> bool {
         self.status.as_ref().is_some_and(|s| s.checked_at.is_none())
+            && self.auto_check_enabled == Some(true)
             && !self.unsupported
             && !self.checking
             && self.run.is_none()
@@ -500,7 +509,10 @@ mod tests {
     /// check from asking forever.
     #[test]
     fn a_never_checked_daemon_is_asked_to_check() {
-        let mut update = UpdateState::default();
+        let mut update = UpdateState {
+            auto_check_enabled: Some(true),
+            ..Default::default()
+        };
         update.apply_status_loaded(Some(SelfUpdateStatus {
             checked_at: None,
             ..status(false)
@@ -513,9 +525,33 @@ mod tests {
         assert!(!update.wants_first_check());
     }
 
+    /// With Check Daily off the daemon never checks by itself, so there is no
+    /// first check to get ahead of; the app asking anyway reached GitHub when
+    /// the Updates page opened. Before the setting has loaded, it cannot tell.
+    #[test]
+    fn no_first_check_unless_the_daemon_checks_daily() {
+        for auto_check_enabled in [Some(false), None] {
+            let mut update = UpdateState {
+                auto_check_enabled,
+                ..Default::default()
+            };
+            update.apply_status_loaded(Some(SelfUpdateStatus {
+                checked_at: None,
+                ..status(false)
+            }));
+            assert!(
+                !update.wants_first_check(),
+                "Check Daily {auto_check_enabled:?}"
+            );
+        }
+    }
+
     #[test]
     fn a_daemon_that_has_already_checked_is_left_alone() {
-        let mut update = UpdateState::default();
+        let mut update = UpdateState {
+            auto_check_enabled: Some(true),
+            ..Default::default()
+        };
         update.apply_status_loaded(Some(SelfUpdateStatus {
             checked_at: Some("2026-08-25T00:00:00Z".to_string()),
             ..status(false)
@@ -545,6 +581,7 @@ mod tests {
 
         let checking = UpdateState {
             status: Some(never.clone()),
+            auto_check_enabled: Some(true),
             checking: true,
             ..Default::default()
         };
@@ -552,6 +589,7 @@ mod tests {
 
         let running = UpdateState {
             status: Some(never),
+            auto_check_enabled: Some(true),
             run: Some(run(RunPhase::Download)),
             ..Default::default()
         };

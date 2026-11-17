@@ -57,6 +57,11 @@ impl AppModel {
             }
             UpdateMessage::AutoCheckLoaded(enabled) => {
                 self.update.auto_check_enabled = Some(enabled);
+                // The status may have landed first, when whether to ask could
+                // not be told yet.
+                if self.update.wants_first_check() {
+                    return self.handle_update_messages(UpdateMessage::CheckNow);
+                }
                 Task::none()
             }
             UpdateMessage::AutoCheckToggled(enabled) => {
