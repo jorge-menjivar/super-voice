@@ -332,7 +332,7 @@ async fn wait_for_start(
     if !named.is_empty() {
         return Err(format!(
             "invalid_frame: {} no longer accepted on start; how an utterance is spoken is \
-             configuration — set a voice with POST /pipeline/{{stage}}/model/{{model}}/voice \
+             configuration — set a voice with POST /tts/pipeline/{{stage}}/model/{{model}}/voice \
              and a language with POST /settings/language",
             named.join(", ")
         ));

@@ -1587,7 +1587,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
     /// The whole of it. A request carries `text` and nothing else, so this is
     /// not a fallback for what a client left out — it is the only source there
     /// is. Which voice the machine speaks in is the user's setting, changed
-    /// through `/pipeline/{stage}/model/{model}/voice` and
+    /// through `/tts/pipeline/{stage}/model/{model}/voice` and
     /// `/settings/language`, and an app that can make the machine talk does not
     /// get a say in it by virtue of being able to talk.
     ///

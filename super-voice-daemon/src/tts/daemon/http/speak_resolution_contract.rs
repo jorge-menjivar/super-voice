@@ -2,7 +2,7 @@
 //! Contract: every HTTP path that opens an utterance resolves the user's
 //! configured voice and language first.
 //!
-//! The daemon stores a per-model voice (`POST /pipeline/{stage}/model/{model}/voice`)
+//! The daemon stores a per-model voice (`POST /tts/pipeline/{stage}/model/{model}/voice`)
 //! precisely so that a caller with no UI for choosing — a keyboard shortcut, the
 //! applet, a browser client — still speaks in the voice the user picked. That
 //! fallback lives in [`SuperTTSDaemon::stored_defaults`], reached through

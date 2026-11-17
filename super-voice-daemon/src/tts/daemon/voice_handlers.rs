@@ -50,7 +50,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
     ///
     /// Says which voice is in effect and where it came from, and deliberately
     /// not which ones could be chosen instead — that is
-    /// `GET /pipeline/{stage}/model/{model}/voice/list`, for the same reason
+    /// `GET /tts/pipeline/{stage}/model/{model}/voice/list`, for the same reason
     /// the language pair is split: a picker needs the choices once, where this
     /// block is re-read on every change.
     async fn model_voice_block(&self, source: &str, model: &str) -> Result<serde_json::Value, ()> {

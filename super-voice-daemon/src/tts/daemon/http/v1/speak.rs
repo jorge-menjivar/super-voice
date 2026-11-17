@@ -32,7 +32,7 @@ use utoipa_axum::routes;
 ///
 /// Each one chose how an utterance was spoken — which voice, which language,
 /// how fast, in what manner. Those are the user's settings: a voice and a
-/// language are set through `/pipeline/{stage}/model/{model}/voice` and
+/// language are set through `/tts/pipeline/{stage}/model/{model}/voice` and
 /// `/settings/language`, and the daemon reads them per utterance. An app that
 /// can make the machine talk does not thereby get a say in which voice it talks
 /// in, so there is nowhere in a speak request to say it.
@@ -62,8 +62,8 @@ fn refuse_removed_fields(body: &Value) -> Option<Response> {
         return None;
     }
     let message = format!(
-        "{} {} no longer accepted on /speak; how an utterance is spoken is \
-         configuration — set a voice with POST /pipeline/{{stage}}/model/{{model}}/voice \
+        "{} {} no longer accepted on /tts/speak; how an utterance is spoken is \
+         configuration — set a voice with POST /tts/pipeline/{{stage}}/model/{{model}}/voice \
          and a language with POST /settings/language",
         named.join(", "),
         if named.len() == 1 { "is" } else { "are" },
@@ -150,7 +150,7 @@ passed through untouched, because a wrong number-to-words is worse than none.
 **`text` is the whole request.** How an utterance is spoken — which voice, which \
 language, how fast, in what manner — is the user's configuration, read per \
 utterance by the daemon. Set a voice with \
-`POST /pipeline/{stage}/model/{model}/voice` and a language with \
+`POST /tts/pipeline/{stage}/model/{model}/voice` and a language with \
 `POST /settings/language`, both under the `settings` scope. An app that can make \
 the machine talk does not thereby get a say in which voice it talks in.
 
