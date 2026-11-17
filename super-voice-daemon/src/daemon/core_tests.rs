@@ -290,6 +290,55 @@ async fn set_audio_theme_rejects_unknown_theme() {
     assert_eq!(daemon.get_audio_theme(), before);
 }
 
+/// A value the command parser refuses is the caller's mistake, so it answers
+/// `400 invalid_value` — the code `docs/protocol/openapi.json` documents for
+/// every settings setter. Before, these came back as a `500` with no code:
+/// an unknown write or read method, an unknown stop mode, a volume over 100,
+/// and pre-captured audio at a sample rate no microphone produces.
+#[tokio::test]
+async fn a_request_that_does_not_parse_is_a_400() {
+    let daemon = test_daemon().await;
+    let cases = [
+        (
+            "set_write_method",
+            serde_json::json!({ "method": "telepathy" }),
+        ),
+        (
+            "set_read_method",
+            serde_json::json!({ "method": "telepathy" }),
+        ),
+        (
+            "set_recording_stop_mode",
+            serde_json::json!({ "mode": "never" }),
+        ),
+        ("set_volume", serde_json::json!({ "volume": 101 })),
+    ];
+    for (command, data) in cases {
+        let mut request = make_request(command);
+        request.data = Some(data);
+
+        let resp = daemon.handle_command(request).await;
+
+        assert_eq!(resp.status, "error", "{command}");
+        assert_eq!(
+            resp.error_code,
+            Some(ErrorCode::InvalidValue),
+            "{command}: {resp:?}"
+        );
+        assert_eq!(
+            resp.error_code.map(ErrorCode::http_status),
+            Some(400),
+            "{command}"
+        );
+    }
+
+    let mut request = make_request("transcribe");
+    request.audio_data = Some(vec![0.1, 0.2]);
+    request.sample_rate = Some(0);
+    let resp = daemon.handle_command(request).await;
+    assert_eq!(resp.error_code, Some(ErrorCode::InvalidValue), "{resp:?}");
+}
+
 /// An unknown notification method is a client error:
 /// `docs/protocol/endpoints/v1/notification_method.md` documents `400
 /// invalid_notification_method`. The daemon must reject it (not silently

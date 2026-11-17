@@ -12,9 +12,12 @@ impl SuperSTTDaemon {
     // the table.
     #[allow(clippy::too_many_lines)]
     pub async fn handle_command(&self, request: DaemonRequest) -> DaemonResponse {
+        // A request that does not parse is the caller's mistake — an unknown
+        // token, a value out of range, a missing field — so it answers `400`,
+        // not the `500` an uncoded error maps to.
         let command = match Command::try_from(request) {
             Ok(cmd) => cmd,
-            Err(e) => return DaemonResponse::error(&e),
+            Err(e) => return DaemonResponse::error_with_code(ErrorCode::InvalidValue, &e),
         };
 
         match command {

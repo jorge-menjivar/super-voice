@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::tts::daemon::types::SuperTTSDaemon;
-use super_voice_shared::tts::models::protocol::{Command, DaemonRequest, DaemonResponse};
+use super_voice_shared::tts::models::protocol::{
+    Command, DaemonRequest, DaemonResponse, ErrorCode,
+};
 
 impl SuperTTSDaemon {
     /// Route a text-to-speech command to its handler.
@@ -11,9 +13,12 @@ impl SuperTTSDaemon {
     /// notifications, updates, the global language, the backend catalog — is
     /// served by the daemon's shared routes, and a command for it is refused.
     pub async fn handle_command(&self, request: DaemonRequest) -> DaemonResponse {
+        // A request that does not parse is the caller's mistake — an unknown
+        // token, a value out of range, a missing field — so it answers `400`,
+        // not the `500` an uncoded error maps to.
         let command = match Command::try_from(request) {
             Ok(cmd) => cmd,
-            Err(e) => return DaemonResponse::error(&e),
+            Err(e) => return DaemonResponse::error_with_code(ErrorCode::InvalidValue, &e),
         };
 
         match command {

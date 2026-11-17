@@ -67,7 +67,7 @@ Content-Type: application/json
 
 | HTTP | `message`              | Meaning                                                       |
 |------|------------------------|---------------------------------------------------------------|
-| 400  | `invalid_write_method` | `method` wasn't one of the four known values                  |
+| 400  | `error_code: invalid_value` | `method` wasn't one of the four known values; `message` names it |
 | 401  | `invalid_session`      | Token unknown / expired / `exe_changed`                       |
 | 403  | `scope_denied`         | Token lacks the `settings` scope                              |
 
