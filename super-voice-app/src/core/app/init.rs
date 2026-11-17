@@ -59,11 +59,6 @@ fn build_nav() -> nav_bar::Model {
         .divider_above(!cfg!(target_os = "linux"));
 
     nav.insert()
-        .text(crate::fl!("connection"))
-        .data::<Section>(Section::Connection)
-        .icon(icons::phosphor(icons::PLUG));
-
-    nav.insert()
         .text(crate::fl!("updates"))
         .data::<Section>(Section::Updates)
         .icon(icons::phosphor(icons::ARROWS_CLOCKWISE));

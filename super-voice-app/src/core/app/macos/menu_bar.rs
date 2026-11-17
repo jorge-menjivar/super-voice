@@ -15,6 +15,9 @@ use muda::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 use crate::state::MenuAction;
 use crate::ui::messages::Message;
 
+/// Menu ID of View → Connection.
+const CONNECTION: &str = "connection";
+
 /// Menu ID of View → About.
 const ABOUT: &str = "about";
 
@@ -62,7 +65,10 @@ fn build() -> muda::Result<Menu> {
     let view = Submenu::with_items(
         "View",
         true,
-        &[&MenuItem::with_id(ABOUT, "About", true, None)],
+        &[
+            &MenuItem::with_id(CONNECTION, "Connection", true, None),
+            &MenuItem::with_id(ABOUT, "About", true, None),
+        ],
     )?;
     Menu::with_items(&[&application, &view])
 }
@@ -95,5 +101,11 @@ pub(crate) fn events() -> impl Stream<Item = Message> {
 }
 
 fn action(id: &MenuId) -> Option<MenuAction> {
-    (id == ABOUT).then_some(MenuAction::About)
+    if id == CONNECTION {
+        Some(MenuAction::Connection)
+    } else if id == ABOUT {
+        Some(MenuAction::About)
+    } else {
+        None
+    }
 }

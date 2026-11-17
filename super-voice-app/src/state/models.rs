@@ -33,7 +33,6 @@ pub enum RecordingStatus {
 /// One page of the application: a nav entry's own, or a tab of a feature's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {
-    Connection,
     Customization,
     /// Speech to text's settings, and one section that tests them: when a
     /// recording stops, preview typing, how text is typed.
@@ -71,7 +70,6 @@ pub enum Section {
     TextToSpeech,
     Shortcuts,
     Customization,
-    Connection,
     Updates,
 }
 
@@ -86,7 +84,6 @@ impl Section {
             Self::Models => crate::fl!("models"),
             Self::Library => crate::fl!("library"),
             Self::Customization => crate::fl!("settings"),
-            Self::Connection => crate::fl!("connection"),
             Self::Updates => crate::fl!("updates"),
         }
     }
@@ -102,7 +99,6 @@ impl Section {
             Self::TextToSpeech => &[Page::Voices, Page::TextToSpeechBehavior],
             Self::Shortcuts => &[Page::Shortcuts],
             Self::Customization => &[Page::Customization],
-            Self::Connection => &[Page::Connection],
             Self::Updates => &[Page::Updates],
         }
     }
@@ -117,7 +113,6 @@ impl Section {
             Page::Voices | Page::TextToSpeechBehavior => Self::TextToSpeech,
             Page::Shortcuts => Self::Shortcuts,
             Page::Customization => Self::Customization,
-            Page::Connection => Self::Connection,
             Page::Updates => Self::Updates,
         }
     }
@@ -135,7 +130,6 @@ impl Page {
             Self::SpeechToTextBehavior | Self::TextToSpeechBehavior => crate::fl!("behavior"),
             Self::Shortcuts => crate::fl!("shortcuts"),
             Self::Customization => crate::fl!("settings"),
-            Self::Connection => crate::fl!("connection"),
             Self::Updates => crate::fl!("updates"),
         }
     }
@@ -146,6 +140,11 @@ impl Page {
 pub enum ContextPage {
     #[default]
     About,
+    /// The daemon connection: its status and socket, and how to start a daemon
+    /// that is not running. Opened from View → Connection. While the daemon
+    /// cannot be reached the window's body shows the same, with the nav
+    /// hidden.
+    Connection,
     /// Right-side sheet for adding a backend from a Git repo URL or a local
     /// directory. Scoped to the Models page — it closes on navigation away or
     /// daemon disconnect (see `AppModel::context_drawer`).
@@ -249,6 +248,7 @@ pub enum ModelsTab {
 /// Menu actions
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MenuAction {
+    Connection,
     About,
 }
 
@@ -266,7 +266,6 @@ mod section_tests {
             Section::TextToSpeech,
             Section::Shortcuts,
             Section::Customization,
-            Section::Connection,
             Section::Updates,
         ];
         let mut seen = Vec::new();
@@ -279,6 +278,6 @@ mod section_tests {
         }
         // The same pages everywhere: text to speech's Behavior tab leaves out
         // reading aloud where the session has none, rather than a tab going.
-        assert_eq!(seen.len(), 10, "every page is in a section");
+        assert_eq!(seen.len(), 9, "every page is in a section");
     }
 }

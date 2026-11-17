@@ -67,7 +67,6 @@ configured = Configuré
 connected = ✅ Connecté
 connecting = ⏳ Connexion…
 connection = Connexion
-connection-information = Informations de connexion
 contexts = Contextes
 controls-how-to-stop-transcribing = Définit comment arrêter la transcription
 controls-how-transcribed-text-is-typed-into = Définit comment le texte transcrit est saisi dans les applications
