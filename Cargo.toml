@@ -82,6 +82,14 @@
       ]
     }
     i18n-embed-fl            = "0.10.0"
+    # The accessibility tree a wrapper widget hands on from what it wraps,
+    # which libcosmic does not re-export. The same repo and rev as libcosmic
+    # below, so it is the copy libcosmic already builds; bump the two
+    # together.
+    iced_accessibility       = {
+      git = "https://github.com/pop-os/libcosmic.git",
+      rev = "ef162b8e16ba4493e05c169cd56c7b9f77f0fda5",
+    }
     # System calls (for client singleton)
     libc                     = "0.2"
     # Cosmic specific. The lib target is `cosmic`, so this is `use cosmic::`

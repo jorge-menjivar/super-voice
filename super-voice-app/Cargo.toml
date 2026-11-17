@@ -17,6 +17,8 @@
     hound.workspace = true
     i18n-embed.workspace = true
     i18n-embed-fl.workspace = true
+    # The press guard hands on its content's accessibility tree.
+    iced_accessibility.workspace = true
     libc.workspace = true
     # COSMIC dependencies: see the two [target.…] tables below, which are
     # where libcosmic itself is declared.
