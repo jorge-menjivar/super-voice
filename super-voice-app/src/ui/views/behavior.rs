@@ -34,8 +34,8 @@ fn banners<'a>(app: &'a AppModel, scopes: &[ErrorScope]) -> Vec<Element<'a, Mess
         .collect()
 }
 
-/// Speech to text's Behavior tab: Recording and Typing, then one Test section
-/// that records and types.
+/// Speech to text's Behavior tab: Recording, Typing and Sounds, then one Test
+/// section that records and types.
 pub fn speech_to_text(app: &AppModel) -> Element<'_, Message> {
     let mut blocks = banners(app, &[ErrorScope::Recording, ErrorScope::InputSimulation]);
     blocks.push(super::recording::settings_section(
@@ -45,6 +45,11 @@ pub fn speech_to_text(app: &AppModel) -> Element<'_, Message> {
     blocks.push(super::input_simulation::typing_section(
         app.write_method,
         app.resolved_write_method,
+    ));
+    blocks.push(super::recording::sounds_section(
+        &app.audio_themes,
+        &app.selected_audio_theme,
+        app.volume,
     ));
     let mut rows = super::recording::test_rows(
         &app.recording_status,
