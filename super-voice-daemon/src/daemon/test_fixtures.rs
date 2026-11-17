@@ -58,6 +58,33 @@ pub(crate) fn openai_backend(
     }
 }
 
+/// A transcription model of `source`, online and otherwise at the manifest's
+/// defaults: one that takes no dictation context unless a test says so.
+pub(crate) fn transcription_model(source: &str) -> ModelDefinition {
+    ModelDefinition {
+        name: "whisper-1".to_string(),
+        source: source.to_string(),
+        is_multilingual: true,
+        primary_language: "en".to_string(),
+        supported_languages: vec!["en".to_string()],
+        estimated_vram_bytes: 0,
+        processing_interval: std::time::Duration::from_secs(1),
+        supported_devices: vec![super_engine_spec::manifest::Device::None],
+        realtime: false,
+        product: super_voice_registry_types::manifest::VoiceModel::new(
+            super_voice_registry_types::manifest::ModelRole::Transcription,
+        ),
+        provider: None,
+    }
+}
+
+/// [`transcription_model`], declaring that it takes the dictation context.
+pub(crate) fn context_model(source: &str) -> ModelDefinition {
+    let mut model = transcription_model(source);
+    model.product.accepts_context = true;
+    model
+}
+
 /// Seed `daemon` with `all` the way a backend refresh does: the whole set,
 /// and each feature's view of it.
 pub(crate) async fn install_backends(

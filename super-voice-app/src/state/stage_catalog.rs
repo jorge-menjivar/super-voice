@@ -86,6 +86,7 @@ mod tests {
             primary_language: "en".into(),
             realtime: false,
             role: "transcription".into(),
+            accepts_context: false,
         }
     }
 

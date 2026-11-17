@@ -105,8 +105,10 @@ installed build actually provides.
 
 `models[].role` is `transcription`, `post_processor` or `synthesis`, as the
 backend's manifest declares it. `models[].accepts_context` is `true` for a
-speech-to-text model of a backend declaring `[capabilities] context = true`:
-the daemon hands it the user's
+speech-to-text model declaring
+[`accepts_context = true`](../../../backend/config.md#models), and for one of a
+backend still declaring the deprecated `[capabilities] context = true`: the
+daemon hands it the user's
 [dictation context](../../../backend/contract.md#request-headers). It is `false`
 for every other model, including a synthesis model of the same backend, and for
 every model of an index published before the field existed.

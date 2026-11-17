@@ -175,19 +175,15 @@ impl<'de> Deserialize<'de> for Contract {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct VoiceCapabilities {
-    /// Opt into being handed the user's dictation context: an `x-voice-prompt`
-    /// header and an `x-voice-vocabulary` header, on every `/v1` request to a
-    /// speech-to-text model. Default `false`, which means neither header is
-    /// sent.
+    /// Deprecated: say it on each model instead, with `[[models]]
+    /// accepts_context`. Read as that field set on every speech-to-text model
+    /// of the backend, so a backend declaring it keeps its context until it
+    /// moves. Removed once no published backend declares it.
     ///
-    /// Unlike `websocket` this is not transport-restricted, and the deviation
-    /// is deliberate: both headers ride the ordinary request every backend
-    /// already receives, so a `subprocess` backend can use them exactly as a
-    /// `wasm` one does. The flag exists to keep the headers off backends that
-    /// would not know what to do with them, not to gate a transport.
-    ///
-    /// Declared per backend rather than per model, because it describes what
-    /// the code reading the request does, and that code is the backend's.
+    /// Opted a whole backend into being handed the user's dictation context.
+    /// But whether a model can use one is the model's: an upstream API may
+    /// take a prompt for one of its models and not another, and a backend
+    /// declaring this for all of them had to claim it for each.
     #[serde(default)]
     pub context: bool,
     /// Reserved. Opts a backend into an incremental-text path, so it can hold
@@ -229,6 +225,26 @@ pub struct VoiceModel {
     /// consulted for a `realtime` model, which streams its own previews.
     #[serde(default)]
     pub force_preview_support: bool,
+
+    /// Speech to text: hand this model the user's dictation context, an
+    /// `x-voice-prompt` header and an `x-voice-vocabulary` header on every
+    /// `/v1` request for it. Default `false`, which means neither header is
+    /// sent.
+    ///
+    /// Said per model, because whether a context is used is the model's: an
+    /// upstream API may take a prompt for one of its models and not another.
+    /// Set it only on a model that reads the headers: a settings UI uses it to
+    /// tell the user which models will hear a vocabulary they typed.
+    ///
+    /// Not transport-restricted: both headers ride the ordinary request every
+    /// backend already receives, so a `subprocess` backend reads them exactly
+    /// as a `wasm` one does.
+    ///
+    /// Not tied to a contract generation, like the `[capabilities] context`
+    /// it replaces: a daemon that does not know the field sends no context,
+    /// which is all a daemon from before contexts could do anyway.
+    #[serde(default)]
+    pub accepts_context: bool,
 
     /// Text to speech: longest `text` the model accepts in one
     /// `POST /v1/synthesize`. Absent means unbounded: the daemon sends whole
@@ -285,6 +301,7 @@ impl VoiceModel {
         Self {
             role,
             force_preview_support: false,
+            accepts_context: false,
             max_input_chars: None,
             output_sample_rate: None,
             default_voice: None,
@@ -293,6 +310,16 @@ impl VoiceModel {
             clone_needs_transcript: false,
             voices: Vec::new(),
         }
+    }
+
+    /// Whether the daemon hands this model the user's dictation context: it
+    /// declares `accepts_context`, or its backend still declares the
+    /// deprecated `[capabilities] context`, which covers every speech-to-text
+    /// model. Never a synthesis model: only speech to text's requests carry a
+    /// context.
+    #[must_use]
+    pub fn takes_context(&self, capabilities: &VoiceCapabilities) -> bool {
+        !self.role.is_synthesis() && (self.accepts_context || capabilities.context)
     }
 }
 
@@ -440,11 +467,9 @@ pub struct VoiceIndexModel {
     #[serde(default = "default_role")]
     pub role: String,
     /// Whether the daemon hands this model the user's dictation context: a
-    /// speech-to-text model of a backend declaring `[capabilities] context =
-    /// true`. Said per model because only speech to text's requests carry a
-    /// context, so a backend serving both features takes it for some models
-    /// and not others. An index published before the field existed has none,
-    /// and is read as `false`.
+    /// speech-to-text model declaring `accepts_context`, or any of a backend
+    /// still declaring the deprecated `[capabilities] context`. An index
+    /// published before the field existed has none, and is read as `false`.
     #[serde(default)]
     pub accepts_context: bool,
 }
@@ -662,7 +687,7 @@ impl Product for Voice {
         let role = model.product.role;
         VoiceIndexModel {
             role: role.to_string(),
-            accepts_context: capabilities.context && role != ModelRole::Synthesis,
+            accepts_context: model.product.takes_context(capabilities),
         }
     }
 
@@ -711,11 +736,15 @@ fn validate_speech_to_text(model: &ModelEntry<VoiceModel>) -> Result<(), VoiceMa
 fn validate_synthesis(model: &ModelEntry<VoiceModel>) -> Result<(), VoiceManifestError> {
     let name = || model.name.clone();
     let product = &model.product;
-    if product.force_preview_support {
+    let speech_to_text_keys = [
+        ("force_preview_support", product.force_preview_support),
+        ("accepts_context", product.accepts_context),
+    ];
+    if let Some((key, _)) = speech_to_text_keys.into_iter().find(|(_, set)| *set) {
         return Err(VoiceManifestError::FieldNotForRole {
             model: name(),
             role: product.role,
-            key: "force_preview_support",
+            key,
         });
     }
     if product.voice_kinds.is_empty() {

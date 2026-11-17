@@ -206,15 +206,25 @@ pub(super) fn entry_accepts_context(entry: &super_voice_shared::registry::Regist
     entry.product.accepts_context
 }
 
-/// Whether a stage's backend is handed the user's dictation context, which
-/// earns it the Contexts chip. The daemon sends a context only with speech to
-/// text's requests, so a backend that declared it can use one still hears
-/// nothing of it when synthesizing.
+/// Whether a stage's backend is handed the user's dictation context for any of
+/// the models it offers that stage, which earns it the Contexts chip there. A
+/// backend whose transcription model takes a context and whose post-processor
+/// does not shows the chip on stage 1 only. The daemon sends a context only
+/// with speech to text's requests, so text to speech's stage never shows it.
 fn stage_hears_context(
     stage: crate::state::Stage,
     backend: &crate::daemon::backends::BackendInfo,
 ) -> bool {
-    backend.accepts_context && stage != crate::state::Stage::Synthesis
+    use crate::state::Stage;
+    let role = match stage {
+        Stage::Transcription => "transcription",
+        Stage::PostProcessing => "post_processor",
+        Stage::Synthesis => return false,
+    };
+    backend
+        .models
+        .iter()
+        .any(|m| m.role == role && m.accepts_context)
 }
 
 /// "1 model", "9 models", "1 post-processor": what a stage calls its models.
@@ -920,6 +930,7 @@ mod capability_tests {
                     primary_language: String::new(),
                     realtime: false,
                     role: "transcription".into(),
+                    accepts_context: false,
                 })
                 .collect(),
             secrets: Vec::new(),
@@ -928,23 +939,33 @@ mod capability_tests {
         }
     }
 
-    /// The Contexts chip shows on speech to text's stages for a backend that
-    /// declared it can use a context, and on no stage for one that did not.
+    /// A backend with a transcription model that takes a context and a
+    /// post-processor that does not: the Contexts chip shows on stage 1, where
+    /// the model hears it, and not on stage 2, where it would not.
     #[test]
-    fn the_contexts_chip_follows_the_declaration() {
+    fn the_contexts_chip_follows_the_stages_models() {
         use crate::state::Stage;
-        let mut b = backend_with_devices(&[&["cpu"]]);
+        let mut b = backend_with_devices(&[&["cpu"], &["cpu"]]);
+        b.models[1].role = "post_processor".into();
         assert!(!stage_hears_context(Stage::Transcription, &b));
-        b.accepts_context = true;
+        assert!(!stage_hears_context(Stage::PostProcessing, &b));
+
+        b.models[0].accepts_context = true;
         assert!(stage_hears_context(Stage::Transcription, &b));
+        assert!(!stage_hears_context(Stage::PostProcessing, &b));
+
+        b.models[1].accepts_context = true;
         assert!(stage_hears_context(Stage::PostProcessing, &b));
     }
 
     /// Text to speech is never handed a context, so its stage shows no chip
-    /// even for a backend that serves both features and declared one.
+    /// even for a backend that serves both features and takes one for speech
+    /// to text.
     #[test]
     fn synthesis_shows_no_contexts_chip() {
-        let mut b = backend_with_devices(&[&["cpu"]]);
+        let mut b = backend_with_devices(&[&["cpu"], &["cpu"]]);
+        b.models[1].role = "synthesis".into();
+        b.models[0].accepts_context = true;
         b.accepts_context = true;
         assert!(!stage_hears_context(crate::state::Stage::Synthesis, &b));
     }

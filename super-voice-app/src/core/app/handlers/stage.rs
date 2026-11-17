@@ -920,6 +920,7 @@ mod tests {
                 primary_language: String::new(),
                 realtime: false,
                 role: "transcription".into(),
+                accepts_context: false,
             }],
             secrets: Vec::new(),
             options: Vec::new(),

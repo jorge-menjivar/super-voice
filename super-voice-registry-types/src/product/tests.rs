@@ -509,19 +509,28 @@ fn every_role_parses_and_reaches_the_index() {
     );
 }
 
-/// A backend declaring `[capabilities] context = true` marks its speech-to-text
-/// models in the index, and only those: text to speech is never handed a
-/// context.
+/// A model declaring `accepts_context` is marked in the index, and so is each
+/// speech-to-text model of a backend still declaring the deprecated
+/// `[capabilities] context`. Text to speech is never handed a context.
 #[test]
 fn the_index_says_which_models_take_a_context() {
-    for (role, declared, takes) in [
-        ("transcription", true, true),
-        ("post_processor", true, true),
-        ("synthesis", true, false),
-        ("transcription", false, false),
+    for (role, on_model, on_backend, takes) in [
+        ("transcription", true, false, true),
+        ("post_processor", true, false, true),
+        ("transcription", false, false, false),
+        ("transcription", false, true, true),
+        ("post_processor", false, true, true),
+        ("synthesis", false, true, false),
     ] {
-        let mut text = model(role, "");
-        if declared {
+        let mut text = model(
+            role,
+            if on_model {
+                "accepts_context = true"
+            } else {
+                ""
+            },
+        );
+        if on_backend {
             text = text.replacen(
                 "[[models]]",
                 "[capabilities]\ncontext = true\n[[models]]",
@@ -532,9 +541,19 @@ fn the_index_says_which_models_take_a_context() {
         assert_eq!(
             Voice::index_model(&m.capabilities.product, &m.models[0]).accepts_context,
             takes,
-            "{role}, context = {declared}"
+            "{role}, on the model = {on_model}, on the backend = {on_backend}"
         );
     }
+}
+
+/// `accepts_context` is declared under any generation, as the backend flag it
+/// replaces was: a v1 backend moving off `[capabilities] context` must not need
+/// a newer contract, and with it a newer daemon, to keep its context.
+#[test]
+fn accepts_context_is_not_tied_to_a_generation() {
+    let m = Manifest::parse(&at("v1", "", "accepts_context = true"))
+        .expect("accepts_context under v1 parses");
+    assert!(m.models[0].product.accepts_context);
 }
 
 /// An entry says a backend takes a context when any of its models does, so a
@@ -608,6 +627,7 @@ fn a_key_of_another_feature_is_refused() {
             "force_preview_support = true",
             "force_preview_support",
         ),
+        ("synthesis", "accepts_context = true", "accepts_context"),
     ] {
         match refusal(&model(role, body)) {
             VoiceManifestError::FieldNotForRole { key: refused, .. } => {

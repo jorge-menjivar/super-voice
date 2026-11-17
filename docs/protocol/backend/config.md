@@ -659,13 +659,12 @@ contract. All fields default to `false` and may be omitted entirely.
 ```toml
 [capabilities]
 websocket = true
-context   = true
 ```
 
 | Field       | Type | Required | Notes                                                                              |
 |-------------|------|----------|------------------------------------------------------------------------------------|
 | `websocket` | bool | no       | Opt into the `super-engine:realtime/ws` import and the `super-engine:realtime/ws-server` export (see [wasm.md — Realtime](./wasm.md#realtime-websocket)). When `true`, the daemon wires those interfaces into the WASM component for every session on a realtime model. **wasm-only** — a `subprocess` backend declaring `websocket = true` is rejected at discovery. Default `false`. |
-| `context`   | bool | no       | Speech to text. Opt into being handed the user's [dictation context](../endpoints/v1/context.md): an `x-voice-prompt` and an `x-voice-vocabulary` header on every `/v1` request (see [contract.md — Request headers](./contract.md#request-headers)). Unlike `websocket` this is **not** transport-restricted — both headers ride the ordinary request, so a `subprocess` backend reads them exactly as a `wasm` one does. Declare it only if the backend actually reads them: a settings UI uses the flag to tell the user which backends will hear a vocabulary they typed. Default `false`, which means neither header is sent. |
+| `context`   | bool | no       | **Deprecated**: declare [`accepts_context`](#models) on each model instead. Read as `accepts_context = true` on every speech-to-text model of the backend, so a backend declaring it keeps its context until it moves. It goes once no published backend declares it. Default `false`. |
 | `streaming_input` | bool | no | Text to speech. **Reserved**: it would opt a backend into an incremental-text path, holding a provider's prosodic context across deltas. The daemon implements no such path yet, so a manifest setting it to `true` is refused rather than silently ignored. Default `false`. |
 
 ## `[[models]]`
@@ -698,6 +697,7 @@ processing_interval_ms = 1000
 | `processing_interval_ms` | integer         | no       | Suggested minimum interval between streaming passes, in ms.      |
 | `realtime`               | bool            | no       | When `true`, the model is driven over the consumer-facing WebSocket endpoint (`GET /v1/stt/transcribe/realtime`) rather than batch `POST /v1/transcribe`. Requires `[capabilities] websocket = true`. Default `false`. For a synthesis model it is **reserved**: the transport works, but no session payload is defined yet. |
 | `force_preview_support`  | bool            | no       | **Speech to text only.** A `v2` field. Force live previews onto a model that has none of its own: while its microphone is open, the daemon re-transcribes a sliding window of the capture every `processing_interval_ms` and shows the result. Each pass is a full transcription the final pass repeats, and for an online model a billed request whose output is discarded, so it is off unless the manifest turns it on. Default `false`. Not consulted for a `realtime` model, which streams its own previews. See [previews](../endpoints/v1/transcribe.md#previews). |
+| `accepts_context`        | bool            | no       | **Speech to text only.** Hand this model the user's [dictation context](../endpoints/v1/context.md): an `x-voice-prompt` and an `x-voice-vocabulary` header on every `/v1` request for it (see [contract.md — Request headers](./contract.md#request-headers)). Said per model, because an upstream API may take a prompt for one of its models and not another. Declare it only on a model that reads the headers: a settings UI uses it to tell the user which models will hear a vocabulary they typed. Not transport-restricted, so a `subprocess` backend reads the headers exactly as a `wasm` one does, and not tied to a generation, like the `[capabilities] context` it replaces. Default `false`, which means neither header is sent. |
 | `max_input_chars`        | integer         | no       | **Text to speech only.** Longest `text` the model accepts in one `POST /v1/synthesize`. Absent means unbounded: the daemon sends whole utterances and never splits for length. When set, the daemon chunks on sentence boundaries to stay under it. Must be non-zero. |
 | `output_sample_rate`      | integer         | no       | **Text to speech only.** Native output rate in Hz, e.g. `24000`. **Advisory** — the authoritative rate is the `x-voice-sample-rate` response header on each synthesis, since a manifest cannot know what a cloud provider will actually return. It lets the settings UI show a rate and the daemon pre-size buffers before the first response. Must be 8000–192000. |
 | `default_voice`          | string          | no       | **Text to speech only.** Voice used when a request omits `voice`. **Required** when `voices` is non-empty, and must name one of them. |
@@ -744,7 +744,8 @@ route its backend does not serve.
 A model takes the keys of its own feature. The text-to-speech keys
 (`max_input_chars`, `output_sample_rate`, `default_voice`, `voice_kinds`,
 `clone_ref_seconds`, `clone_needs_transcript`, `voices`) are refused on a
-speech-to-text model, and `force_preview_support` on a synthesis model:
+speech-to-text model, and `force_preview_support` and `accepts_context` on a
+synthesis model:
 they would mean nothing there, so declaring one is a manifest bug.
 
 ```

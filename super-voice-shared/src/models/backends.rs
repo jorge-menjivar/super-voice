@@ -69,8 +69,10 @@ pub struct BackendInfo {
     pub secrets: Vec<BackendSecret>,
     /// Non-sensitive options stored in the daemon config.
     pub options: Vec<BackendOption>,
-    /// Whether this backend declared `[capabilities] context = true`, and so is
-    /// handed the user's [dictation context](crate::models::contexts).
+    /// Whether any of this backend's models is handed the user's
+    /// [dictation context](crate::models::contexts): the sum of the models'
+    /// [`accepts_context`](BackendModel::accepts_context), as the registry
+    /// index sums them up on its entry.
     ///
     /// Published so a settings UI can say which installed backends will
     /// actually hear a vocabulary the user typed. Without it the page can only
@@ -143,6 +145,16 @@ pub struct BackendModel {
     /// what it was.
     #[serde(default = "default_role")]
     pub role: String,
+    /// Whether the daemon hands this model the user's
+    /// [dictation context](crate::models::contexts): a speech-to-text model
+    /// declaring `accepts_context`, or one of a backend still declaring the
+    /// deprecated `[capabilities] context`. Always `false` for a synthesis
+    /// model.
+    ///
+    /// `default` so a payload from a daemon older than the field still
+    /// deserializes, reading as "takes none".
+    #[serde(default)]
+    pub accepts_context: bool,
 }
 
 /// The role a catalog entry without the key is read as.
@@ -301,6 +313,7 @@ mod tests {
             primary_language: String::new(),
             realtime: false,
             role: "transcription".into(),
+            accepts_context: false,
         };
         let v = serde_json::to_value(&m).expect("serializes");
         assert!(

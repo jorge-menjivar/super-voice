@@ -71,7 +71,7 @@ Manifest `allowed_hosts` entries remain fully SSRF-guarded.
 
 The active model (`x-voice-model`), the secrets and options a
 backend declares in its [configuration](./config.md), and — for a
-speech-to-text backend declaring `[capabilities] context = true` — the user's
+speech-to-text model declaring `accepts_context = true` — the user's
 [dictation context](../endpoints/v1/context.md) as `x-voice-prompt` and
 `x-voice-vocabulary`, all arrive as request headers on every `/v1` request (see
 [request headers](./contract.md#request-headers)). The component reads them from
@@ -239,7 +239,7 @@ resource. A guest must still call `recv` to take it.
   `x-voice-option-*` request headers; use a secret only to authenticate outbound calls, and
   never forward it upstream.
 - For speech to text, to bias recognition toward what the user is actually
-  dictating, declare `[capabilities] context = true` and read `x-voice-prompt`
+  dictating, declare `accepts_context = true` on each model that uses it and read `x-voice-prompt`
   (a JSON string) and `x-voice-vocabulary` (a JSON array of strings), shaping
   them however your upstream wants them. Both are escaped to pure ASCII, so an ordinary JSON
   parse is the whole decode.
