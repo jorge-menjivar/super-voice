@@ -10038,10 +10038,6 @@
           "options"
         ],
         "properties": {
-          "accepts_context": {
-            "type": "boolean",
-            "description": "Whether any of this backend's models is handed the user's\n[dictation context](crate::models::contexts): the sum of the models'\n[`accepts_context`](BackendModel::accepts_context), as the registry\nindex sums them up on its entry.\n\nPublished so a settings UI can say which installed backends will\nactually hear a vocabulary the user typed. Without it the page can only\nlist contexts and hope; a backend that ignores the headers has no way to\nsay so at runtime, and the user would have no way to tell the difference\nbetween \"this did nothing\" and \"this is not working\".\n\n`default` so a payload from a daemon older than the field still\ndeserializes, reading as \"does not accept one\" — which is what such a\ndaemon would do anyway, since it sends the headers to nobody."
-          },
           "allowed_hosts": {
             "type": "array",
             "items": {
@@ -10093,6 +10089,13 @@
             "type": "string",
             "description": "Repo id the backend was installed from, e.g.\n`github.com/super-stt/openai`. The key the daemon stores its\nsecrets and options under."
           },
+          "supports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the backend can do, as the registry index lists it on its entry:\n`gpu`, `cpu` and `online` from its models' devices, `dictation_context`\nwhen a model takes the user's [dictation context](crate::models::contexts),\nand `voice_cloning` when a model speaks in voices the user cloned. The\nnames are [`supports`](super_voice_registry_types::index::supports)'.\n\n`gpu` is about the build installed here: a backend whose install has\nonly the CPU build does not list it, whatever its manifest says. A\nbackend with no install record (a local-directory import) falls back to\nits models' devices.\n\nPublished so a settings UI can say which installed backends will\nactually hear a vocabulary the user typed, or speak in a voice they\nrecorded, without walking the models. Strings, not a closed set: a\nclient skips an entry it does not know. Empty from a daemon older than\nthe field."
+          },
           "version": {
             "type": "string",
             "description": "The installed backend's `[backend].version`, read from the `backend.toml`\non disk — what is installed, not what is published.\n\nFor a backend the registry does not list (imported from a directory, or\ninstalled from an arbitrary repo) this is the only version there is; for\nthe rest it is still the authoritative one, since the registry reports\nwhat a release offers rather than what this machine has. `default` so a\npayload written before the field existed still deserializes."
@@ -10109,6 +10112,10 @@
           "accepts_context": {
             "type": "boolean",
             "description": "Whether the daemon hands this model the user's\n[dictation context](crate::models::contexts): a speech-to-text model\ndeclaring `accepts_context`, or one of a backend still declaring the\ndeprecated `[capabilities] context`. Always `false` for a synthesis\nmodel.\n\n`default` so a payload from a daemon older than the field still\ndeserializes, reading as \"takes none\"."
+          },
+          "clones_voices": {
+            "type": "boolean",
+            "description": "Whether the model speaks in a voice the user cloned: a synthesis model\nwith `cloned` in its `voice_kinds`, which takes the `voice:<uuid>` ids\nof the [voice library](crate::tts::models::voices).\n\n`default` so a payload from a daemon older than the field still\ndeserializes, reading as \"clones none\"."
           },
           "estimated_vram_bytes": {
             "type": "integer",
@@ -10749,11 +10756,15 @@
             "allOf": [
               {
                 "type": "object",
-                "description": "The per-model fields Super Voice's index carries beside `name` and\n`supported_devices`: the model's role, as its manifest spells it, and\nwhether it is handed the user's dictation context, so a client can tell what\na backend's models are for, and which take a context, before installing it.",
+                "description": "The per-model fields Super Voice's index carries beside `name` and\n`supported_devices`: the model's role, as its manifest spells it, whether it\nis handed the user's dictation context, and whether it speaks in cloned\nvoices, so a client can tell what a backend's models are for and what they\ncan do before installing it.",
                 "properties": {
                   "accepts_context": {
                     "type": "boolean",
                     "description": "Whether the daemon hands this model the user's dictation context: a\nspeech-to-text model declaring `accepts_context`, or any of a backend\nstill declaring the deprecated `[capabilities] context`. An index\npublished before the field existed has none, and is read as `false`."
+                  },
+                  "clones_voices": {
+                    "type": "boolean",
+                    "description": "Whether the model speaks in a voice the user cloned: a synthesis model\nwith `cloned` in its `voice_kinds`. An index published before the field\nexisted has none, and is read as `false`."
                   },
                   "role": {
                     "type": "string",
@@ -11547,152 +11558,137 @@
         }
       },
       "RegistryBackend": {
-        "allOf": [
-          {
-            "allOf": [
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "version",
+          "name",
+          "license",
+          "kind",
+          "contract",
+          "online",
+          "supports_gpu",
+          "supports_cpu",
+          "models",
+          "secrets",
+          "options",
+          "compatibility"
+        ],
+        "properties": {
+          "allowed_hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "backend_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The backend's reverse-DNS identifier, or `None` when the registry entry\npredates it. Names the install directory."
+          },
+          "builds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Build"
+            },
+            "description": "The frameworks this machine can run a build of this backend on, best\nfirst, each with its build's download size. `selected_asset` is the\nfirst: the build an install picks when none is asked for. A client\noffering to switch an installed backend to another framework reads the\ndownload it would cost from here. Empty for a WASM backend, which has\none build."
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/Compatibility"
+          },
+          "contract": {
+            "type": "string",
+            "description": "The contract generation the backend declares, as published. Carried\nas a string so a client lists an entry whose generation it does not\nknow; `compatibility` says whether this daemon can drive it."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "index_stale": {
+            "oneOf": [
               {
-                "type": "object",
-                "description": "The backend-level fields Super Voice's index carries beside `online`,\n`supports_gpu` and `supports_cpu`: what the backend's models can do, summed\nup from their [`VoiceIndexModel`]s, so a client reads it off the entry\nwithout walking the models.",
-                "properties": {
-                  "accepts_context": {
-                    "type": "boolean",
-                    "description": "Whether any of the backend's models takes the user's dictation context\n([`VoiceIndexModel::accepts_context`]). An index published before the\nfield existed has none, and is read as `false`."
-                  }
-                }
+                "$ref": "#/components/schemas/IndexStale"
               },
               {
-                "type": "object",
-                "description": "The backend-level fields the product adds, as the index carries them\n([`Product::IndexBackend`](crate::product::Product::IndexBackend))."
+                "type": "null"
               }
             ]
           },
-          {
-            "type": "object",
-            "required": [
-              "id",
-              "source",
-              "version",
-              "name",
-              "license",
-              "kind",
-              "contract",
-              "online",
-              "supports_gpu",
-              "supports_cpu",
-              "models",
-              "secrets",
-              "options",
-              "compatibility"
+          "installed_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "min_client": {
+            "type": [
+              "string",
+              "null"
             ],
-            "properties": {
-              "allowed_hosts": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "backend_id": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "The backend's reverse-DNS identifier, or `None` when the registry entry\npredates it. Names the install directory."
-              },
-              "builds": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Build"
-                },
-                "description": "The frameworks this machine can run a build of this backend on, best\nfirst, each with its build's download size. `selected_asset` is the\nfirst: the build an install picks when none is asked for. A client\noffering to switch an installed backend to another framework reads the\ndownload it would cost from here. Empty for a WASM backend, which has\none build."
-              },
-              "compatibility": {
-                "$ref": "#/components/schemas/Compatibility"
-              },
-              "contract": {
-                "type": "string",
-                "description": "The contract generation the backend declares, as published. Carried\nas a string so a client lists an entry whose generation it does not\nknow; `compatibility` says whether this daemon can drive it."
-              },
-              "description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "index_stale": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/IndexStale"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "installed_version": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "kind": {
-                "type": "string"
-              },
-              "license": {
-                "type": "string"
-              },
-              "min_client": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "The release of the daemon's product that first understood `contract`,\nas stamped by the indexer. `None` for an index that predates the\nstamp."
-              },
-              "models": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/IndexModel"
-                }
-              },
-              "name": {
-                "type": "string"
-              },
-              "online": {
-                "type": "boolean"
-              },
-              "options": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/IndexOption"
-                }
-              },
-              "secrets": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/IndexSecret"
-                }
-              },
-              "source": {
-                "type": "string"
-              },
-              "supports_cpu": {
-                "type": "boolean"
-              },
-              "supports_gpu": {
-                "type": "boolean"
-              },
-              "update_available": {
-                "type": "boolean",
-                "description": "Whether `version` is newer than `installed_version`, decided by the\ndaemon.\n\nThe comparison is semver, and it belongs here rather than in each client\nfor the same reason `installed_version` does: the daemon is what reads\nthe installed manifest and owns the index, so it is the one place that\ncan answer without a client re-deriving it. A client that wants to\npresent the versions still has both.\n\n`false` when nothing is installed, when the installed version is at or\nahead of the index's, or when either version does not parse."
-              },
-              "version": {
-                "type": "string"
-              }
+            "description": "The release of the daemon's product that first understood `contract`,\nas stamped by the indexer. `None` for an index that predates the\nstamp."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IndexModel"
             }
+          },
+          "name": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IndexOption"
+            }
+          },
+          "secrets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IndexSecret"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "supports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the backend can do, as the index lists it\n([`IndexBackend::supports`](crate::index::IndexBackend::supports)).\nEmpty from a daemon or an index from before the list."
+          },
+          "supports_cpu": {
+            "type": "boolean"
+          },
+          "supports_gpu": {
+            "type": "boolean"
+          },
+          "update_available": {
+            "type": "boolean",
+            "description": "Whether `version` is newer than `installed_version`, decided by the\ndaemon.\n\nThe comparison is semver, and it belongs here rather than in each client\nfor the same reason `installed_version` does: the daemon is what reads\nthe installed manifest and owns the index, so it is the one place that\ncan answer without a client re-deriving it. A client that wants to\npresent the versions still has both.\n\n`false` when nothing is installed, when the installed version is at or\nahead of the index's, or when either version does not parse."
+          },
+          "version": {
+            "type": "string"
           }
-        ]
+        }
       },
       "RegistryError": {
         "type": "object",
@@ -12681,6 +12677,13 @@
             "type": "string",
             "description": "Repo id the backend was installed from, e.g.\n`github.com/super-tts/openai`. The key the daemon stores its\nsecrets and options under."
           },
+          "supports": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the backend can do, as `/backend/list` lists it: `gpu`, `cpu`\nand `online` from its models' devices (`gpu` for the build installed\nhere), and `voice_cloning` when a model speaks in voices the user\ncloned. Strings, not a closed set: a client skips an entry it does not\nknow. Empty from a daemon older than the field."
+          },
           "version": {
             "type": "string",
             "description": "The installed backend's `[backend].version`, read from the `backend.toml`\non disk — what is installed, not what is published.\n\nFor a backend the registry does not list (imported from a directory, or\ninstalled from an arbitrary repo) this is the only version there is; for\nthe rest it is still the authoritative one, since the registry reports\nwhat a release offers rather than what this machine has. `default` so a\npayload written before the field existed still deserializes."
@@ -12694,6 +12697,10 @@
           "name"
         ],
         "properties": {
+          "clones_voices": {
+            "type": "boolean",
+            "description": "Whether the model speaks in a voice the user cloned: it has `cloned` in\nits `voice_kinds`, and takes the `voice:<uuid>` ids of the\n[voice library](crate::tts::models::voices).\n\n`default` so a payload from a daemon older than the field still\ndeserializes, reading as \"clones none\"."
+          },
           "estimated_vram_bytes": {
             "type": "integer",
             "format": "int64",
