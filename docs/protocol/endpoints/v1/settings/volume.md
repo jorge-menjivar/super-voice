@@ -37,7 +37,7 @@ Content-Type: application/json
 
 {
   "status":  "success",
-  "message": "Volume set to 75"
+  "message": "Volume set to: 75"
 }
 ```
 
@@ -67,13 +67,12 @@ Content-Type: application/json
 
 {
   "status":  "success",
-  "message": "Volume is 75"
+  "message": "75"
 }
 ```
 
-The `message` carries the current volume as a sentence. The
-preferred shape is the integer in `0..=100` itself; UIs should
-parse the number out of the message rather than displaying it raw.
+The `message` carries the current volume as a bare number, `"75"`, not
+as a field of its own, so parse it back out.
 
 **Errors:**
 
