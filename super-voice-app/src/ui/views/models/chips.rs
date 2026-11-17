@@ -573,45 +573,49 @@ pub(super) fn role_groups<'a>(models: impl Iterator<Item = (&'a str, &'a str)>) 
     .collect()
 }
 
-/// A backend's model inventory: one row per kind of model it ships — a muted
-/// role label, the first [`MAX_MODEL_TAGS`] names as outline [`model_tag`]s,
-/// then a filled "+N" [`count_chip`] for the rest. `None` when the backend
-/// serves no models, so the caller skips the row.
+/// A backend's model inventory: one block per kind of model it ships — a muted
+/// role label on its own line, then the first [`MAX_MODEL_TAGS`] names as
+/// outline [`model_tag`]s and a filled "+N" [`count_chip`] for the rest. `None`
+/// when the backend serves no models, so the caller skips the inventory.
 ///
 /// The label names the kind rather than saying "Models", so a card answers
-/// "what does this ship?" without the user opening it.
+/// "what does this ship?" without the user opening it. It sits above its tags
+/// rather than before them, so every kind's tags start at the card's edge
+/// instead of after a label of whatever width that kind's name has.
 ///
-/// Each row wraps rather than squeezes. Three long names are wider than a
-/// narrow card: a plain row then breaks a tag's name across two lines inside
-/// its pill and crushes the "+N" chip to a sliver. Super TTS's Qwen cards hit
-/// it first, when the inventory still shared its line with the capability
-/// chips. Wrapping moves the tags that do not fit to a second line, whole.
+/// The tags wrap rather than squeeze. Three long names are wider than a narrow
+/// card: a plain row then breaks a tag's name across two lines inside its pill
+/// and crushes the "+N" chip to a sliver. Wrapping moves the tags that do not
+/// fit to a second line, whole.
 pub(super) fn models_inventory(groups: &[RoleGroup]) -> Option<Element<'static, Message>> {
     if groups.is_empty() {
         return None;
     }
     let spacing = cosmic::theme::spacing();
     let muted = muted_text_color();
-    let rows: Vec<Element<'static, Message>> = groups
+    let blocks: Vec<Element<'static, Message>> = groups
         .iter()
         .map(|group| {
-            let mut inventory =
-                row![text::caption(group.label.clone()).class(cosmic::theme::Text::Color(muted))]
-                    .spacing(spacing.space_xxs)
-                    .align_y(Alignment::Center);
+            let mut tags = widget::row::with_capacity(MAX_MODEL_TAGS + 1)
+                .spacing(spacing.space_xxs)
+                .align_y(Alignment::Center);
             for name in group.names.iter().take(MAX_MODEL_TAGS) {
-                inventory = inventory.push(model_tag(name.clone()));
+                tags = tags.push(model_tag(name.clone()));
             }
             let rest = group.names.len().saturating_sub(MAX_MODEL_TAGS);
             if rest > 0 {
-                inventory = inventory.push(count_chip(format!("+{rest}")));
+                tags = tags.push(count_chip(format!("+{rest}")));
             }
-            inventory.wrap().vertical_spacing(spacing.space_xxs).into()
+            widget::column::with_capacity(2)
+                .spacing(spacing.space_xxs)
+                .push(text::caption(group.label.clone()).class(cosmic::theme::Text::Color(muted)))
+                .push(tags.wrap().vertical_spacing(spacing.space_xxs))
+                .into()
         })
         .collect();
     Some(
-        cosmic::iced::widget::column(rows)
-            .spacing(spacing.space_xxs)
+        cosmic::iced::widget::column(blocks)
+            .spacing(spacing.space_s)
             .into(),
     )
 }
