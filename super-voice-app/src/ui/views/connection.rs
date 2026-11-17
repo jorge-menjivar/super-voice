@@ -53,8 +53,23 @@ fn launchd_target() -> String {
     )
 }
 
-/// Settings page view using cosmic-settings style
+/// The window's whole body while the daemon cannot be reached, with the nav
+/// hidden: the Connection sheet's rows under a "Connection" heading.
 pub fn page(app: &AppModel) -> Element<'_, Message> {
+    page_layout(
+        crate::fl!("connection"),
+        settings::view_column(vec![section(app).into()]),
+    )
+}
+
+/// The View menu's Connection sheet: the daemon's status and socket, and what
+/// to do when it cannot be reached.
+pub fn sheet(app: &AppModel) -> Element<'_, Message> {
+    section(app).into()
+}
+
+/// The connection's rows, as the page and the sheet both show them.
+fn section(app: &AppModel) -> settings::Section<'_, Message> {
     let daemon_status = &app.daemon_status;
     let status_text = match daemon_status {
         DaemonStatus::Connected => crate::fl!("connected"),
@@ -67,9 +82,8 @@ pub fn page(app: &AppModel) -> Element<'_, Message> {
     };
 
     let mut connection_section = settings::section()
-        .title(crate::fl!("connection-information"))
         .add(settings::item(
-            crate::fl!("connection"),
+            crate::fl!("status"),
             text::body(status_text),
         ))
         .add(settings::item(
@@ -104,10 +118,7 @@ pub fn page(app: &AppModel) -> Element<'_, Message> {
             ));
     }
 
-    let sections = vec![connection_section.into()];
-
-    let sections_view = settings::view_column(sections);
-    page_layout(crate::fl!("connection"), sections_view)
+    connection_section
 }
 
 /// What to do about a daemon that cannot be reached: usually the command

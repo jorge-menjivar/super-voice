@@ -77,6 +77,15 @@ impl AppModel {
                 )
                 .title(crate::fl!("about")),
             ),
+            // Shown whatever the daemon is doing: opened while it cannot be
+            // reached, it repeats the window's body, which is what was asked.
+            ContextPage::Connection => Some(
+                context_drawer::context_drawer(
+                    views::connection::sheet(self),
+                    Message::Shell(ShellMessage::ToggleContextPage(ContextPage::Connection)),
+                )
+                .title(crate::fl!("connection")),
+            ),
             // The Add-backend sheet is scoped to the Library page (its Browse
             // tab) while the daemon is connected; navigating away or a dropped
             // connection both dismiss it here, no extra bookkeeping required.
@@ -253,7 +262,6 @@ impl AppModel {
             Page::Library => views::models::library_page(self),
             Page::Contexts => views::contexts::page(self),
             Page::Updates => views::updates::page(&self.update),
-            Page::Connection => views::connection::page(self),
             Page::Shortcuts => views::shortcuts::page(
                 &self.shortcuts,
                 self.action_error_for(crate::state::ErrorScope::Shortcuts),

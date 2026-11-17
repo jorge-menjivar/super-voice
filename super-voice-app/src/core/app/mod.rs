@@ -327,11 +327,10 @@ impl cosmic::Application for AppModel {
             menu::root(crate::fl!("view")).apply(Element::from),
             menu::items(
                 &HashMap::new(),
-                vec![menu::Item::Button(
-                    crate::fl!("about"),
-                    None,
-                    MenuAction::About,
-                )],
+                vec![
+                    menu::Item::Button(crate::fl!("connection"), None, MenuAction::Connection),
+                    menu::Item::Button(crate::fl!("about"), None, MenuAction::About),
+                ],
             ),
         )]);
 
@@ -575,6 +574,9 @@ impl menu::action::MenuAction for MenuAction {
 
     fn message(&self) -> Self::Message {
         match self {
+            MenuAction::Connection => {
+                Message::Shell(ShellMessage::ToggleContextPage(ContextPage::Connection))
+            }
             MenuAction::About => {
                 Message::Shell(ShellMessage::ToggleContextPage(ContextPage::About))
             }
