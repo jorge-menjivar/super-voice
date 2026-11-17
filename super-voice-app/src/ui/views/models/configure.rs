@@ -278,13 +278,15 @@ pub(super) fn bool_option_row<'a>(
     let source = source.to_string();
     let name = option.name.clone();
 
-    let toggle = widget::toggler(option.bool_value()).on_toggle(move |value| {
-        Message::Backend(BackendMessage::BackendOptionToggled {
-            source: source.clone(),
-            name: name.clone(),
-            value,
-        })
-    });
+    let toggle = crate::ui::press_guard::press_guard(
+        widget::toggler(option.bool_value()).on_toggle(move |value| {
+            Message::Backend(BackendMessage::BackendOptionToggled {
+                source: source.clone(),
+                name: name.clone(),
+                value,
+            })
+        }),
+    );
 
     let mut item = settings::item::builder(display);
     if !option.description.is_empty() {

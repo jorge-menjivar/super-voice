@@ -14,6 +14,7 @@ use super::models::{accent_button_class, pill_label_tinted, rounded_tooltip};
 use crate::core::app::AppModel;
 use crate::state::update::{RunPhase, UpdateState};
 use crate::ui::messages::{Message, UpdateMessage};
+use crate::ui::press_guard::press_guard;
 
 const INSTALL_SH_URL: &str =
     "https://raw.githubusercontent.com/jorge-menjivar/super-voice/main/install.sh";
@@ -127,12 +128,12 @@ fn settings_section(state: &UpdateState) -> Element<'_, Message> {
         .add(
             settings::item::builder(crate::fl!("check-daily"))
                 .description(crate::fl!("check-daily-description"))
-                .control(
+                .control(press_guard(
                     widget::toggler(state.auto_check_enabled.unwrap_or(true)).on_toggle_maybe(
                         (!run_active)
                             .then_some(|b| Message::Update(UpdateMessage::AutoCheckToggled(b))),
                     ),
-                ),
+                )),
         )
         .add(
             settings::item::builder(crate::fl!("include-betas"))
@@ -141,9 +142,11 @@ fn settings_section(state: &UpdateState) -> Element<'_, Message> {
                     // Inert while the write and its re-check are in flight:
                     // the switch has already moved, and a second press would
                     // race the first.
-                    widget::toggler(state.beta_optin_shown()).on_toggle_maybe(
-                        (!run_active && !state.beta_pending)
-                            .then_some(|b| Message::Update(UpdateMessage::BetaOptinToggled(b))),
+                    press_guard(
+                        widget::toggler(state.beta_optin_shown())
+                            .on_toggle_maybe((!run_active && !state.beta_pending).then_some(|b| {
+                                Message::Update(UpdateMessage::BetaOptinToggled(b))
+                            })),
                     ),
                 ),
         )

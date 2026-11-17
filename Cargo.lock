@@ -7120,6 +7120,7 @@ dependencies = [
  "hyper-util",
  "i18n-embed",
  "i18n-embed-fl",
+ "iced_accessibility",
  "libc",
  "libcosmic",
  "log",

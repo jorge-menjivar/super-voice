@@ -5,6 +5,7 @@ use super_voice_shared::models::notification_method::NotificationMethod;
 
 use super::common::{error_banner, page_layout};
 use crate::ui::messages::{IdleUnloadMessage, LanguageMessage, Message, NotificationMethodMessage};
+use crate::ui::press_guard::press_guard;
 
 /// The idle times offered, in seconds. The first is what the toggle turns on.
 const IDLE_UNLOAD_CHOICES: [u64; 5] = [300, 60, 900, 1800, 3600];
@@ -86,13 +87,15 @@ fn memory_section(idle_unload_secs: u64) -> Element<'static, Message> {
     let mut section = settings::section().title(crate::fl!("memory")).add(
         settings::item::builder(crate::fl!("sleep-when-idle"))
             .description(crate::fl!("sleep-when-idle-description"))
-            .control(cosmic::widget::toggler(enabled).on_toggle(|on| {
-                Message::IdleUnload(IdleUnloadMessage::Changed(if on {
-                    IDLE_UNLOAD_CHOICES[0]
-                } else {
-                    0
-                }))
-            })),
+            .control(press_guard(cosmic::widget::toggler(enabled).on_toggle(
+                |on| {
+                    Message::IdleUnload(IdleUnloadMessage::Changed(if on {
+                        IDLE_UNLOAD_CHOICES[0]
+                    } else {
+                        0
+                    }))
+                },
+            ))),
     );
 
     if enabled {

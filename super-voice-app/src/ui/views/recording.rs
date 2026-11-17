@@ -14,6 +14,7 @@ use crate::state::RecordingStatus;
 use crate::ui::messages::{
     Message, PreviewTypingMessage, RecordingMessage, RecordingStopModeMessage,
 };
+use crate::ui::press_guard::press_guard;
 
 /// Recording section: stop mode + preview typing.
 pub(super) fn settings_section(
@@ -45,10 +46,10 @@ pub(super) fn settings_section(
                 .description(crate::fl!(
                     "shows-transcription-as-you-speak-experimental-may"
                 ))
-                .control(
+                .control(press_guard(
                     cosmic::widget::toggler(preview_typing_enabled)
                         .on_toggle(|b| Message::PreviewTyping(PreviewTypingMessage::Toggled(b))),
-                ),
+                )),
         )
         .into()
 }
@@ -78,10 +79,10 @@ pub(super) fn sounds_section<'a>(
     let mut section = settings::section().title(crate::fl!("sounds")).add(
         settings::item::builder(crate::fl!("audio-feedback"))
             .description(crate::fl!("play-a-sound-when-a-recording-starts-and-stops"))
-            .control(
+            .control(press_guard(
                 cosmic::widget::toggler(audio_enabled)
                     .on_toggle(|b| Message::Recording(RecordingMessage::AudioFeedbackToggled(b))),
-            ),
+            )),
     );
 
     if audio_enabled {

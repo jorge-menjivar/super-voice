@@ -149,10 +149,12 @@ pub(super) fn download_toolbar<'a>(
     let kind = super::chips::role_filter_chips(filters.role, |r| {
         Message::ModelsPage(ModelsPageMessage::RegistryRoleFilter(r))
     });
-    let show_incompat = cosmic::widget::toggler(filters.include_incompatible)
-        .label(crate::fl!("show-incompatible"))
-        .spacing(spacing.space_xs)
-        .on_toggle(|x| Message::ModelsPage(ModelsPageMessage::RegistryIncludeIncompatible(x)));
+    let show_incompat = crate::ui::press_guard::press_guard(
+        cosmic::widget::toggler(filters.include_incompatible)
+            .label(crate::fl!("show-incompatible"))
+            .spacing(spacing.space_xs)
+            .on_toggle(|x| Message::ModelsPage(ModelsPageMessage::RegistryIncludeIncompatible(x))),
+    );
 
     // Runs-on chips, Kind chips, then the incompatible toggle, wrapping onto a
     // second line when all three will not fit.
