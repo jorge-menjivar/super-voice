@@ -9,8 +9,8 @@ use cosmic::widget::{self, button, settings, text};
 use crate::state::SpeakingStatus;
 use crate::ui::messages::{Message, SpeechMessage};
 
-/// The speech test's rows, for the Behavior tab's one Test section: status,
-/// a text field, and speak/stop with the live output level.
+/// The speech test's rows, for the Behavior tab's one Test section: the
+/// status with speak/stop, a text field, and the live output level.
 pub(super) fn test_rows<'a>(
     speaking_status: &'a SpeakingStatus,
     test_text: &'a str,
@@ -51,17 +51,18 @@ pub(super) fn test_rows<'a>(
         .on_input(|s| Message::Speech(SpeechMessage::TestTextChanged(s)))
         .width(Length::Fill);
 
-    let level_widget = row![
-        action_button,
+    // As the recording test lays them out: the button beside the state it
+    // changes, the meter on a line of its own.
+    let status_widget = row![text::body(status_text), action_button]
+        .align_y(Alignment::Center)
+        .spacing(cosmic::theme::spacing().space_s);
+    let output_meter =
         widget::determinate_linear(audio_level.max(if audio_level > 0.0 { 0.1 } else { 0.0 }))
-            .width(Length::Fill),
-    ]
-    .align_y(Alignment::Center)
-    .spacing(10);
+            .width(Length::Fixed(super::common::LEVEL_METER_WIDTH));
 
     vec![
-        settings::item(crate::fl!("status"), text::body(status_text)).into(),
+        settings::item(crate::fl!("status"), status_widget).into(),
         settings::flex_item(crate::fl!("text"), input).into(),
-        settings::flex_item(crate::fl!("output-level"), level_widget).into(),
+        settings::item(crate::fl!("output-level"), output_meter).into(),
     ]
 }

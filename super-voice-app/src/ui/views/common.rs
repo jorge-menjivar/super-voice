@@ -9,6 +9,14 @@ use cosmic::{Apply, Element};
 use crate::ui::icons;
 use crate::ui::messages::Message;
 
+/// How wide a test's level meter is, and the Volume slider: one width, so the
+/// bars on speech to text's Behavior tab line up.
+///
+/// Fixed, not filling: each meter sits in a settings row's control, which
+/// shrinks to its content, and a bar that fills that has nothing to fill. It
+/// drew at no width at all.
+pub const LEVEL_METER_WIDTH: f32 = 250.0;
+
 /// A scope-tagged action-error banner: a destructive warning glyph plus the
 /// message. Shared by the pages that render `AppModel::action_error` (the
 /// Customization page and the Configure sheet) so a failed save surfaces
