@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::tts::daemon::types::SuperTTSDaemon;
 use crate::tts::tts_models::backends;
-use log::{info, warn};
+use log::{debug, info, warn};
 use super_engine_daemon::stage::{Load, ModelId, StageExt};
 use super_voice_shared::tts::models::protocol::{DaemonResponse, DaemonStatusEvent, ErrorCode};
 
@@ -36,7 +36,9 @@ impl SuperTTSDaemon {
                 .with_current_source(loaded.definition.source.clone())
                 .with_message(format!("Current model: {name}"))
         } else {
-            warn!("No model is currently loaded");
+            // Not worth a warning: a model asleep while idle is out of memory
+            // too, and clients read this whenever they show the stage.
+            debug!("No model is currently loaded");
             DaemonResponse::error("No model is currently loaded")
         };
         DaemonResponse {
