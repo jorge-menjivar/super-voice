@@ -16,12 +16,8 @@ pub use super_voice_registry_types::index::IndexModel as RegistryModel;
 
 /// The registry listing, with Super STT's model fields.
 pub type RegistryListResponse = super_engine_spec::registry::RegistryListResponse<RegistryBackend>;
-/// One backend in [`RegistryListResponse`], with what its models can do
-/// summed up as the index carries it.
-pub type RegistryBackend = super_engine_spec::registry::RegistryBackend<
-    RegistryModel,
-    super_voice_registry_types::index::VoiceIndexBackend,
->;
+/// One backend in [`RegistryListResponse`].
+pub type RegistryBackend = super_engine_spec::registry::RegistryBackend<RegistryModel>;
 /// What a source would install.
 pub type PreviewResponse = super_engine_spec::registry::PreviewResponse<RegistryBackend>;
 

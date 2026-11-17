@@ -69,27 +69,33 @@ pub struct BackendInfo {
     pub secrets: Vec<BackendSecret>,
     /// Non-sensitive options stored in the daemon config.
     pub options: Vec<BackendOption>,
-    /// Whether any of this backend's models is handed the user's
-    /// [dictation context](crate::models::contexts): the sum of the models'
-    /// [`accepts_context`](BackendModel::accepts_context), as the registry
-    /// index sums them up on its entry.
+    /// What the backend can do, as the registry index lists it on its entry:
+    /// `gpu`, `cpu` and `online` from its models' devices, `dictation_context`
+    /// when a model takes the user's [dictation context](crate::models::contexts),
+    /// and `voice_cloning` when a model speaks in voices the user cloned. The
+    /// names are [`supports`](super_voice_registry_types::index::supports)'.
+    ///
+    /// `gpu` is about the build installed here: a backend whose install has
+    /// only the CPU build does not list it, whatever its manifest says. A
+    /// backend with no install record (a local-directory import) falls back to
+    /// its models' devices.
     ///
     /// Published so a settings UI can say which installed backends will
-    /// actually hear a vocabulary the user typed. Without it the page can only
-    /// list contexts and hope; a backend that ignores the headers has no way to
-    /// say so at runtime, and the user would have no way to tell the difference
-    /// between "this did nothing" and "this is not working".
-    ///
-    /// `default` so a payload from a daemon older than the field still
-    /// deserializes, reading as "does not accept one" — which is what such a
-    /// daemon would do anyway, since it sends the headers to nobody.
+    /// actually hear a vocabulary the user typed, or speak in a voice they
+    /// recorded, without walking the models. Strings, not a closed set: a
+    /// client skips an entry it does not know. Empty from a daemon older than
+    /// the field.
     #[serde(default)]
-    pub accepts_context: bool,
+    pub supports: Vec<String>,
 }
 
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 /// One model served by a backend.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "a wire shape: each flag is one thing a client reads about the model"
+)]
 pub struct BackendModel {
     pub name: String,
     /// Compatibility shim, mirroring [`IndexModel::provider`]. Always an empty
@@ -155,6 +161,14 @@ pub struct BackendModel {
     /// deserializes, reading as "takes none".
     #[serde(default)]
     pub accepts_context: bool,
+    /// Whether the model speaks in a voice the user cloned: a synthesis model
+    /// with `cloned` in its `voice_kinds`, which takes the `voice:<uuid>` ids
+    /// of the [voice library](crate::tts::models::voices).
+    ///
+    /// `default` so a payload from a daemon older than the field still
+    /// deserializes, reading as "clones none".
+    #[serde(default)]
+    pub clones_voices: bool,
 }
 
 /// The role a catalog entry without the key is read as.
@@ -314,6 +328,7 @@ mod tests {
             realtime: false,
             role: "transcription".into(),
             accepts_context: false,
+            clones_voices: false,
         };
         let v = serde_json::to_value(&m).expect("serializes");
         assert!(

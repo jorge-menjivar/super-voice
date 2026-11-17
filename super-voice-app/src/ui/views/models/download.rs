@@ -11,12 +11,11 @@ use crate::ui::messages::{Message, ModelsPageMessage, ShellMessage};
 
 use super::active::backend_glyph_tile;
 use super::chips::{
-    CloudEgress, capability_chips, entry_accepts_context, models_inventory, result_count,
-    role_groups,
+    CloudEgress, capability_chips, entry_accepts_context, entry_clones_voices, models_inventory,
+    result_count, role_groups,
 };
-use super::surface::{
-    card_divider, card_facts, card_surface, card_title_block, muted_text_color, repo_button,
-};
+use super::surface::{card_divider, card_surface, card_title_block, muted_text_color, repo_button};
+use super_voice_registry_types::index::supports;
 
 /// Browse tab split into its two regions: the fixed search + filter toolbar
 /// (with the live result count) and the scrollable list of backend cards.
@@ -56,7 +55,7 @@ pub(super) fn download_split(app: &AppModel) -> (Element<'_, Message>, Element<'
             continue;
         }
         if let Some(o) = filters.online
-            && entry.online != o
+            && supports::has(&entry.supports, supports::ONLINE) != o
         {
             continue;
         }
@@ -288,13 +287,28 @@ pub(super) fn download_card<'a>(
     let start_error = app.registry.install_errors.get(&entry.source);
 
     // Laid out as an Installed card is, so a backend reads the same before and
-    // after it is installed: the name with the version that would install and
-    // the description, then its models opposite its capability chips. The
-    // repository is a button, as there. Install lives in the footer below.
+    // after it is installed: the name with the version that would install, its
+    // capability chips and the description, then its models. The repository is
+    // a button, as there. Install lives in the footer below.
     let description = entry.description.clone().filter(|d| !d.is_empty());
+
+    // Browse describes a backend that is not installed, so nothing of the
+    // user's is configured for it yet.
+    let egress = supports::has(&entry.supports, supports::ONLINE).then_some(CloudEgress {
+        hosts: entry.allowed_hosts.as_slice(),
+        user_url: false,
+    });
+    let caps = capability_chips(
+        supports::has(&entry.supports, supports::GPU),
+        supports::has(&entry.supports, supports::CPU),
+        egress,
+        entry_accepts_context(entry),
+        entry_clones_voices(entry),
+        true,
+    );
     let header = row![
         backend_glyph_tile(),
-        card_title_block(entry.name.clone(), &entry.version, description),
+        card_title_block(entry.name.clone(), &entry.version, description, caps),
         repo_button(&entry.source),
     ]
     .spacing(spacing.space_s)
@@ -302,20 +316,6 @@ pub(super) fn download_card<'a>(
     let mut card = widget::column::with_capacity(5)
         .spacing(spacing.space_s)
         .push(header);
-
-    // Browse describes a backend that is not installed, so nothing of the
-    // user's is configured for it yet.
-    let egress = entry.online.then_some(CloudEgress {
-        hosts: entry.allowed_hosts.as_slice(),
-        user_url: false,
-    });
-    let caps = capability_chips(
-        entry.supports_gpu,
-        entry.supports_cpu,
-        egress,
-        entry_accepts_context(entry),
-        true,
-    );
     let groups = role_groups(
         entry
             .models
@@ -323,8 +323,8 @@ pub(super) fn download_card<'a>(
             .map(|m| (m.name.as_str(), m.product.role.as_str())),
     );
     let inventory = models_inventory(&groups);
-    if let Some(facts) = card_facts(inventory, caps) {
-        card = card.push(card_divider()).push(facts);
+    if let Some(models) = inventory {
+        card = card.push(card_divider()).push(models);
     }
 
     // Footer: contextual note on the left, Install button on the right.

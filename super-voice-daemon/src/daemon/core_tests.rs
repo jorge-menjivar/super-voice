@@ -584,6 +584,55 @@ async fn the_catalog_lists_both_features_backends() {
     assert_eq!(stage[0]["source"], stt);
 }
 
+/// Both catalogs say which models speak in cloned voices, and list it on the
+/// backend: `/backend/list`, and text to speech's own, which the picker of its
+/// stage reads. A backend serving both features clones with its synthesis
+/// model only.
+#[tokio::test]
+async fn the_catalogs_say_which_models_clone_voices() {
+    use crate::daemon::test_fixtures::{install_backends, openai_backend, transcription_model};
+    use super_voice_registry_types::manifest::{ModelRole, VoiceKind, VoiceModel};
+
+    let daemon = test_daemon().await;
+    let source = "github.com/super-stt/openai";
+    let mut speaks = transcription_model(source);
+    speaks.name = "tts-1".to_string();
+    speaks.product = VoiceModel {
+        voice_kinds: vec![VoiceKind::Preset, VoiceKind::Cloned],
+        clone_ref_seconds: Some(10.0),
+        ..VoiceModel::new(ModelRole::Synthesis)
+    };
+    let backend = openai_backend(source, vec![transcription_model(source), speaks], None);
+    install_backends(&daemon, vec![backend]).await;
+
+    let cat = daemon
+        .handle_list_backends()
+        .await
+        .backends
+        .expect("catalog");
+    assert_eq!(cat[0]["models"][0]["clones_voices"], false, "{cat}");
+    assert_eq!(cat[0]["models"][1]["clones_voices"], true, "{cat}");
+    assert_eq!(
+        cat[0]["supports"],
+        serde_json::json!(["online", "voice_cloning"]),
+        "{cat}"
+    );
+
+    let tts = daemon
+        .tts
+        .handle_list_backends()
+        .await
+        .backends
+        .expect("catalog");
+    assert_eq!(tts[0]["models"][0]["name"], "tts-1", "{tts}");
+    assert_eq!(tts[0]["models"][0]["clones_voices"], true, "{tts}");
+    assert_eq!(
+        tts[0]["supports"],
+        serde_json::json!(["online", "voice_cloning"]),
+        "{tts}"
+    );
+}
+
 /// `handle_list_backends` builds the catalog JSON (models, secrets,
 /// options) from the discovered backends, and an in-memory config option
 /// override is reflected in an option's effective `value`.

@@ -251,30 +251,6 @@ pub(super) fn card_divider<'a>() -> Element<'a, Message> {
     widget::divider::horizontal::default().into()
 }
 
-/// A Library card's facts row: the backend's models taking the width, its
-/// capability chips opposite. Installed and Browse cards share it, so a
-/// backend reads the same before and after it is installed. `None` when there
-/// is neither, so the card skips the row and the divider above it.
-pub(super) fn card_facts<'a>(
-    models: Option<Element<'a, Message>>,
-    chips: Option<Element<'a, Message>>,
-) -> Option<Element<'a, Message>> {
-    if models.is_none() && chips.is_none() {
-        return None;
-    }
-    let mut facts = widget::row::with_capacity(2)
-        .spacing(cosmic::theme::spacing().space_s)
-        .align_y(cosmic::iced::Alignment::Center)
-        .width(Length::Fill);
-    if let Some(models) = models {
-        facts = facts.push(widget::container(models).width(Length::Fill));
-    }
-    if let Some(chips) = chips {
-        facts = facts.push(chips);
-    }
-    Some(facts.into())
-}
-
 /// The mark at the foot of a card whose model is out of memory until its next
 /// use: "Idle", in the card's bottom-right corner.
 pub(super) fn idle_label<'a>() -> Element<'a, Message> {
@@ -314,18 +290,26 @@ pub(super) fn repo_button(source: &str) -> Element<'static, Message> {
     )
 }
 
-/// A card's identity block: the backend name with an optional muted
-/// description beneath it. Takes the remaining width so trailing actions sit
-/// flush at the card's right edge.
+/// A card's identity block: the backend name, its capability chips on a line
+/// of their own under it, and an optional muted description beneath. Takes the
+/// remaining width so trailing actions sit flush at the card's right edge.
+///
+/// The chips sit with the name rather than opposite the models: beside a
+/// backend's model tags they took the card's right side, and with five of them
+/// they crowded it.
 pub(super) fn card_title_block<'a>(
     name: String,
     version: &str,
     description: Option<String>,
+    chips: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    let mut col = widget::column::with_capacity(2)
-        .spacing(cosmic::theme::spacing().space_xxxs)
+    let mut col = widget::column::with_capacity(3)
+        .spacing(cosmic::theme::spacing().space_xxs)
         .width(Length::Fill)
         .push(card_title_line(name, version));
+    if let Some(chips) = chips {
+        col = col.push(chips);
+    }
     if let Some(desc) = description {
         col = col.push(card_description(desc));
     }
@@ -469,10 +453,14 @@ pub(super) fn card_header<'a>(
 ) -> Element<'a, Message> {
     let spacing = cosmic::theme::spacing();
     if !narrow {
-        return row![glyph, card_title_block(name, version, description), actions]
-            .spacing(spacing.space_s)
-            .align_y(cosmic::iced::Alignment::Center)
-            .into();
+        return row![
+            glyph,
+            card_title_block(name, version, description, None),
+            actions
+        ]
+        .spacing(spacing.space_s)
+        .align_y(cosmic::iced::Alignment::Center)
+        .into();
     }
     let mut column = widget::column::with_capacity(3)
         .spacing(spacing.space_xs)
@@ -505,7 +493,7 @@ pub(super) fn empty_state(
     let glyph = super::active::backend_glyph_tile();
     let caption = Some(caption);
     let Some(action) = action else {
-        return row![glyph, card_title_block(title, "", caption)]
+        return row![glyph, card_title_block(title, "", caption, None)]
             .spacing(cosmic::theme::spacing().space_s)
             .align_y(cosmic::iced::Alignment::Center)
             .into();

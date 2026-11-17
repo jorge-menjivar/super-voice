@@ -16,7 +16,8 @@ use super::chips::{
     backend_supports_gpu, capability_chips, models_inventory, role_groups, update_chip,
     update_offer, update_progress_chip,
 };
-use super::surface::{card_divider, card_facts, card_surface, card_title_block, repo_button};
+use super::surface::{card_divider, card_surface, card_title_block, repo_button};
+use super_voice_registry_types::index::supports;
 
 /// The Library's Installed tab, as its filter toolbar and its cards: every
 /// backend the daemon discovered on disk, one card each. The active backend is
@@ -126,10 +127,10 @@ fn installed_toolbar<'a>(
         .into()
 }
 
-/// One installed backend's Library card: the leading glyph, the name and
-/// description, then a repo button + Configure + a "⋯" overflow (Update /
-/// Uninstall) on the right, over a facts row of the served-models inventory
-/// and capability chips. No Activate here — that's the Models page's job.
+/// One installed backend's Library card: the leading glyph, the name, its
+/// capability chips and its description, then a repo button + Configure + a
+/// "⋯" overflow (Update / Uninstall) on the right, over the served-models
+/// inventory. No Activate here — that's the Models page's job.
 pub(super) fn installed_card<'a>(
     backend: &'a BackendInfo,
     app: &'a AppModel,
@@ -182,17 +183,9 @@ pub(super) fn installed_card<'a>(
             )),
         )
         .push(overflow);
-    let header = row![
-        backend_glyph_tile(),
-        card_title_block(backend.name.clone(), &backend.version, description),
-        actions,
-    ]
-    .spacing(spacing.space_s)
-    .align_y(Alignment::Center);
-
-    // Facts row: the served-models inventory — one line per kind of model the
-    // backend ships — takes the width; the GPU / CPU / Cloud capability chips
-    // sit opposite it.
+    // The served-models inventory, one line per kind of model the backend
+    // ships, takes the card's width under the divider; the capability chips
+    // ride with the name.
     let groups = role_groups(
         backend
             .models
@@ -208,17 +201,25 @@ pub(super) fn installed_card<'a>(
         backend_supports_gpu(backend),
         backend_supports_cpu(backend),
         egress,
-        backend.accepts_context,
+        supports::has(&backend.supports, supports::DICTATION_CONTEXT),
+        supports::has(&backend.supports, supports::VOICE_CLONING),
         // Suppress chip tooltips while this card's overflow menu is open, so the
         // menu paints cleanly on top instead of a tooltip showing half-behind it.
         !menu_open,
     );
+    let header = row![
+        backend_glyph_tile(),
+        card_title_block(backend.name.clone(), &backend.version, description, caps),
+        actions,
+    ]
+    .spacing(spacing.space_s)
+    .align_y(Alignment::Center);
 
     let mut card = widget::column::with_capacity(3)
         .spacing(spacing.space_s)
         .push(header);
-    if let Some(facts) = card_facts(inventory, caps) {
-        card = card.push(card_divider()).push(facts);
+    if let Some(models) = inventory {
+        card = card.push(card_divider()).push(models);
     }
     let surface = card_surface(card, false);
 

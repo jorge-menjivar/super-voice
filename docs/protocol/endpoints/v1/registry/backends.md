@@ -53,11 +53,12 @@ GET /registry/backend/list?include_incompatible=false&kind=wasm&online=true&q=op
       "online": false,
       "supports_gpu": true,
       "supports_cpu": true,
-      "accepts_context": false,
+      "supports": ["gpu", "cpu"],
       "models": [
         { "name": "voxtral-mini", "provider": "",
           "supported_devices": ["cpu", "gpu"],
-          "role": "transcription", "accepts_context": false }
+          "role": "transcription", "accepts_context": false,
+          "clones_voices": false }
       ],
       "secrets": [],
       "options": [],
@@ -113,11 +114,26 @@ daemon hands it the user's
 for every other model, including a synthesis model of the same backend, and for
 every model of an index published before the field existed.
 
-`accepts_context` on the entry sums up its models: `true` when any of them
-takes a context, so a client can tell from the entry alone, the way
-`supports_gpu` and `supports_cpu` sum up their devices. It is worked out from
-the models, never declared, and `false` on an index published before the
-field existed.
+`models[].clones_voices` is `true` for a synthesis model with `cloned` in its
+[`voice_kinds`](../../../backend/config.md#models): it speaks in the voices the
+user [cloned](../tts/voice.md). It is `false` for every other model, and for
+every model of an index published before the field existed.
+
+`supports` lists what the backend can do, so a client reads it from one field
+rather than walking the models or reading a flag per fact:
+
+| Entry               | When                                                           |
+|---------------------|----------------------------------------------------------------|
+| `gpu`               | A model can run on a GPU, as `supports_gpu` says.              |
+| `cpu`               | A model can run on the CPU, as `supports_cpu` says.            |
+| `online`            | A model runs remotely, as `online` says.                       |
+| `dictation_context` | A model takes the user's dictation context (`models[].accepts_context`). |
+| `voice_cloning`     | A model speaks in cloned voices (`models[].clones_voices`).    |
+
+It is worked out from the models, never declared. `online`, `supports_gpu` and
+`supports_cpu` stay beside it for clients from before the list. Read it as
+strings and skip an entry you do not know: entries are added as backends learn
+to do more. An index published before the list has none, and reads as empty.
 
 Per-entry fields beyond what `index.json` carries:
 

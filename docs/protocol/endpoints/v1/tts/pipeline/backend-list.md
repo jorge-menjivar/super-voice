@@ -51,7 +51,8 @@ this stage:
       "name":    "Kokoro",
       "version": "1.2.0",
       "kind":    "subprocess",
-      "models":  [ /* … */ ],
+      "supports": ["gpu", "voice_cloning"],  // what its models can do
+      "models":  [ /* … each with its own `clones_voices` */ ],
       "secrets": [ /* … */ ],
       "options": [ /* … */ ]
     }

@@ -3,6 +3,7 @@ use cosmic::Element;
 use cosmic::iced::widget::{column, row};
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{self, settings, text};
+use super_voice_registry_types::index::supports;
 
 use crate::core::app::AppModel;
 use crate::daemon::backends::{BackendInfo, BackendOption, BackendSecret};
@@ -31,13 +32,14 @@ pub fn configure_sheet<'a>(backend: &'a BackendInfo, app: &'a AppModel) -> Eleme
     // not the backend's own, and the one most likely to be changed twice in a
     // sitting. Only for a backend that declared it can use one — on any other,
     // the row would offer a choice with no effect.
-    if backend.accepts_context {
+    let takes_context = supports::has(&backend.supports, supports::DICTATION_CONTEXT);
+    if takes_context {
         body.push(context_row(backend, app));
     }
 
     if backend.secrets.is_empty() && backend.options.is_empty() {
         body.push(
-            text::body(if backend.accepts_context {
+            text::body(if takes_context {
                 crate::fl!("this-backend-has-no-other-settings")
             } else {
                 crate::fl!("this-backend-has-nothing-to-configure")

@@ -69,6 +69,13 @@ pub struct BackendInfo {
     pub secrets: Vec<BackendSecret>,
     /// Non-sensitive options stored in the daemon config.
     pub options: Vec<BackendOption>,
+    /// What the backend can do, as `/backend/list` lists it: `gpu`, `cpu`
+    /// and `online` from its models' devices (`gpu` for the build installed
+    /// here), and `voice_cloning` when a model speaks in voices the user
+    /// cloned. Strings, not a closed set: a client skips an entry it does not
+    /// know. Empty from a daemon older than the field.
+    #[serde(default)]
+    pub supports: Vec<String>,
 }
 
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -120,6 +127,14 @@ pub struct BackendModel {
     /// batch `POST /v1/synthesize`.
     #[serde(default)]
     pub realtime: bool,
+    /// Whether the model speaks in a voice the user cloned: it has `cloned` in
+    /// its `voice_kinds`, and takes the `voice:<uuid>` ids of the
+    /// [voice library](crate::tts::models::voices).
+    ///
+    /// `default` so a payload from a daemon older than the field still
+    /// deserializes, reading as "clones none".
+    #[serde(default)]
+    pub clones_voices: bool,
 }
 
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -258,6 +273,7 @@ mod tests {
             supported_languages: Vec::new(),
             primary_language: String::new(),
             realtime: false,
+            clones_voices: false,
         };
         let v = serde_json::to_value(&m).expect("serializes");
         assert!(

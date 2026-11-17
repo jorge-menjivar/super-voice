@@ -8,6 +8,7 @@ use crate::daemon::client::get_gpu_info;
 use crate::state::{ContextPage, DaemonStatus, ModelsTab};
 use crate::ui::messages::{Message, ModelsPageMessage};
 use cosmic::prelude::*;
+use super_voice_registry_types::index::supports;
 
 impl AppModel {
     /// Models-page UI: tab switch, per-backend dropdown / GPU / select, the
@@ -116,11 +117,9 @@ impl AppModel {
                 let mut tasks = vec![Task::done(cosmic::Action::App(Message::Contexts(
                     crate::ui::messages::ContextsMessage::Reload,
                 )))];
-                if self
-                    .backends
-                    .iter()
-                    .any(|b| b.source == source && b.accepts_context)
-                {
+                if self.backends.iter().any(|b| {
+                    b.source == source && supports::has(&b.supports, supports::DICTATION_CONTEXT)
+                }) {
                     tasks.push(Self::fetch_backend_context(source));
                 }
                 Task::batch(tasks)

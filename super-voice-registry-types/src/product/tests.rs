@@ -556,38 +556,65 @@ fn accepts_context_is_not_tied_to_a_generation() {
     assert!(m.models[0].product.accepts_context);
 }
 
-/// An entry says a backend takes a context when any of its models does, so a
-/// client reads it off the entry without walking the models.
+/// An entry's `supports` lists the dictation context when any of its models
+/// takes one, and voice cloning when any clones, in that order, beside what
+/// the engine lists from the models' devices.
 #[test]
-fn the_index_entry_sums_up_whether_a_backend_takes_a_context() {
-    let indexed = |accepts: &[bool]| -> Vec<IndexModel> {
-        accepts
-            .iter()
-            .map(|&accepts_context| IndexModel {
-                name: "m".to_string(),
-                provider: String::new(),
-                supported_devices: vec!["cpu".to_string()],
-                product: super::VoiceIndexModel {
-                    role: "transcription".to_string(),
-                    accepts_context,
-                },
-            })
-            .collect()
+fn the_index_entry_lists_what_its_models_do() {
+    use crate::index::supports::{DICTATION_CONTEXT, VOICE_CLONING};
+    let indexed = |accepts_context: bool, clones_voices: bool| IndexModel {
+        name: "m".to_string(),
+        provider: String::new(),
+        supported_devices: vec!["cpu".to_string()],
+        product: super::VoiceIndexModel {
+            role: "transcription".to_string(),
+            accepts_context,
+            clones_voices,
+        },
     };
-    assert!(!Voice::index_backend(&indexed(&[])).accepts_context);
-    assert!(!Voice::index_backend(&indexed(&[false, false])).accepts_context);
-    assert!(Voice::index_backend(&indexed(&[false, true])).accepts_context);
+    assert!(Voice::index_supports(&[]).is_empty());
+    assert!(Voice::index_supports(&[indexed(false, false)]).is_empty());
+    assert_eq!(
+        Voice::index_supports(&[indexed(false, false), indexed(true, false)]),
+        [DICTATION_CONTEXT]
+    );
+    assert_eq!(
+        Voice::index_supports(&[indexed(false, true), indexed(true, false)]),
+        [DICTATION_CONTEXT, VOICE_CLONING]
+    );
+}
 
-    let entry: crate::index::IndexBackend = serde_json::from_value(serde_json::json!({
-        "id": "y", "source": "github.com/x/y", "version": "1.0.0", "tag": "v1.0.0",
-        "name": "Y", "kind": "wasm", "contract": "v1", "entrypoint": "y.wasm",
-        "online": false, "supports_gpu": false, "supports_cpu": true,
-        "models": [], "secrets": [], "options": [], "assets": {}
-    }))
-    .expect("an entry from before the field parses");
-    assert!(
-        !entry.product.accepts_context,
-        "an index from before the field reads as taking no context"
+/// A synthesis model taking `voice:<uuid>` ids is marked in the index as
+/// cloning voices, and one taking only presets is not, nor one from an index
+/// published before the field. Its entry lists voice cloning beside the
+/// engine's own entries.
+#[test]
+fn the_index_says_which_models_clone_voices() {
+    let preset = Manifest::parse(&with_model("")).expect("parses");
+    let cloning = Manifest::parse(&with_model(
+        "voice_kinds = [\"preset\", \"cloned\"]\nclone_ref_seconds = 12.0",
+    ))
+    .expect("parses");
+    let indexed = |m: &Manifest| Voice::index_model(&m.capabilities.product, &m.models[0]);
+    assert!(!indexed(&preset).clones_voices);
+    assert!(indexed(&cloning).clones_voices);
+
+    let model: IndexModel =
+        serde_json::from_str(r#"{"name":"m","supported_devices":["cpu"],"role":"synthesis"}"#)
+            .expect("parses");
+    assert!(!model.product.clones_voices);
+
+    let entry = crate::index::IndexBackend::from_manifest(
+        "y".to_string(),
+        cloning,
+        "1.0.0".to_string(),
+        "v1.0.0".to_string(),
+        crate::index::IndexAssets::default(),
+        None,
+    );
+    assert_eq!(
+        entry.supports,
+        ["cpu", crate::index::supports::VOICE_CLONING]
     );
 }
 
