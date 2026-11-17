@@ -38,7 +38,6 @@
     chrono.workspace = true
     clap.workspace = true
     cpal.workspace = true
-    dashmap.workspace = true
     dirs.workspace = true
     futures = "0.3"
     hex = "0.4.3"
