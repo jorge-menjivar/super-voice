@@ -659,7 +659,7 @@ fn transcribe_mic_sse(
         // would never reach `finalize_recording_session`, and its
         // recorder would run on without anyone to collect it.
         if client_disconnected {
-            // Cancels it while it waits for its model; stops its capture after.
+            // Cancels it while it is starting; stops its capture after.
             daemon.recording.stop();
             final_response = Some(cmd_fut.await);
         }
@@ -736,7 +736,7 @@ pub(crate) async fn transcribe_stop(State(s): State<AppState>) -> Response {
     // shared with `record`'s start case, so a recording that ended between a
     // check here and its dispatch would have been answered with a new one.
     // One of the documented stop messages comes back:
-    //   - "Recording stop signal sent" (also when it was waiting for its model)
+    //   - "Recording stop signal sent" (also when it was still starting)
     //   - "Manual stop not enabled in current mode"
     //   - "Transcription in progress, please wait"
     //   - "No recording in progress"

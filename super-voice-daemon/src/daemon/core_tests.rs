@@ -3344,85 +3344,63 @@ async fn daemon_loading_on_demand() -> SuperSTTDaemon {
     daemon
 }
 
-/// Start a recording on `daemon` and wait until it is waiting for its model.
-async fn start_pending_recording(
-    daemon: &SuperSTTDaemon,
-) -> tokio::task::JoinHandle<DaemonResponse> {
-    let bg = daemon.clone();
-    let recording = tokio::spawn(async move { bg.handle_command(make_request("record")).await });
+/// A recording does not wait for its model to load: the load starts, and the
+/// recording goes on to capture while it runs.
+#[tokio::test]
+async fn a_recording_does_not_wait_for_its_model() {
+    let daemon = daemon_loading_on_demand().await;
+    // A load in flight, which every load on demand waits for: held, the load
+    // does not finish.
+    let slot = std::sync::Arc::clone(&daemon.model);
+    let held = slot.begin_load().await.expect("a turn");
+
+    let mut load = tokio::time::timeout(Duration::from_millis(500), daemon.load_for_recording())
+        .await
+        .expect("the recording waited for its model")
+        .expect("a model that loads on demand");
+
+    assert!(load.finished().is_none(), "the load ended while held");
+    drop(held);
+    // The fixture backend has no component, so its load fails.
+    let loaded = load.wait().await;
+    assert!(loaded.is_err_and(|e| e.starts_with("whisper-1 did not load")));
+}
+
+/// A load that fails while the take captures is seen without waiting for it,
+/// which is what ends the take at once.
+#[tokio::test]
+async fn a_recording_sees_its_model_fail_to_load_while_it_captures() {
+    let daemon = daemon_loading_on_demand().await;
+    let mut load = daemon
+        .load_for_recording()
+        .await
+        .expect("a model that loads on demand");
+
+    let mut failure = None;
     for _ in 0..200 {
-        if daemon.recording.is_waiting() {
-            return recording;
+        failure = load.failure();
+        if failure.is_some() {
+            break;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    panic!("the recording never waited for its model");
+
+    assert!(failure.is_some_and(|e| e.starts_with("whisper-1 did not load")));
 }
 
-/// A stop reaches a recording that is still waiting for its model: it ends
-/// without capturing, and the daemon reported itself busy meanwhile.
+/// With no model in memory and none that loads on demand there is nothing
+/// to load, and so nothing to record with.
 #[tokio::test]
-async fn a_recording_waiting_for_its_model_can_be_cancelled() {
-    let daemon = daemon_loading_on_demand().await;
-    // A load in flight, which every load on demand waits for: held, the load
-    // never finishes.
-    let slot = std::sync::Arc::clone(&daemon.model);
-    let _held = slot.begin_load().await.expect("a turn");
-    let recording = start_pending_recording(&daemon).await;
-    assert_eq!(daemon.handle_status().await.busy, Some(true));
+async fn a_recording_with_no_model_to_load_has_nothing_to_record_with() {
+    let daemon = test_daemon().await;
 
-    assert_eq!(daemon.recording.stop(), Stopped::Cancelled);
-
-    let response = recording.await.expect("the recording task ended");
-    assert_eq!(response.status, "success");
-    assert_eq!(
-        response.message.as_deref(),
-        Some(DaemonResponse::RECORDING_CANCELLED_MSG)
-    );
-    assert!(!daemon.recording.is_busy(), "nothing was captured");
+    assert!(daemon.load_for_recording().await.is_none());
 }
 
-/// A second start while one waits for its model is refused, and leaves the
-/// first waiting: only a stop cancels it.
+/// A stop that lands before the recording takes the microphone cancels it:
+/// the claim stays its own until then.
 #[tokio::test]
-async fn a_second_start_does_not_cancel_a_recording_waiting_for_its_model() {
-    let daemon = daemon_loading_on_demand().await;
-    let slot = std::sync::Arc::clone(&daemon.model);
-    let _held = slot.begin_load().await.expect("a turn");
-    let recording = start_pending_recording(&daemon).await;
-
-    let second = daemon.handle_command(make_request("record")).await;
-
-    assert_eq!(second.error_code, Some(ErrorCode::RecordingInProgress));
-    assert!(daemon.recording.is_waiting());
-    assert!(!recording.is_finished());
-    assert_eq!(daemon.recording.stop(), Stopped::Cancelled);
-    recording.await.expect("the recording task ended");
-}
-
-/// A recording waiting for its model blocks model changes as a capturing one
-/// does: an unload or a switch would otherwise take the model it is about to
-/// record with.
-#[tokio::test]
-async fn a_recording_waiting_for_its_model_blocks_model_changes() {
-    let daemon = daemon_loading_on_demand().await;
-    let slot = std::sync::Arc::clone(&daemon.model);
-    let _held = slot.begin_load().await.expect("a turn");
-    let recording = start_pending_recording(&daemon).await;
-
-    let unload = daemon.handle_unload_active_model().await;
-    let reload = daemon.handle_reload_active_model().await;
-
-    assert_eq!(unload.error_code, Some(ErrorCode::RecordingInProgress));
-    assert_eq!(reload.error_code, Some(ErrorCode::RecordingInProgress));
-    assert_eq!(daemon.recording.stop(), Stopped::Cancelled);
-    recording.await.expect("the recording task ended");
-}
-
-/// A stop that lands after the model has loaded, before the recording takes
-/// the microphone, still cancels it: the claim stays its own until then.
-#[tokio::test]
-async fn a_stop_between_the_load_and_capture_cancels_the_recording() {
+async fn a_stop_before_capture_cancels_the_recording() {
     use crate::daemon::recording::RecordingCancelled;
     let daemon = test_daemon().await;
     let (claim, _cancelled) = daemon.recording.reserve().expect("free");
@@ -3502,37 +3480,27 @@ async fn an_unload_switches_off_a_model_not_in_memory() {
     assert!(!daemon.config.read().await.transcription.is_active());
 }
 
-/// A recording whose model fails to load on demand says so, not "no model
-/// loaded": a model is selected, and loading another would not help.
+/// A take whose model fails to load while it captures ends saying so, not "no
+/// model loaded": a model is selected, and loading another would not help.
+/// The notice lands where the user is typing, and the microphone is free
+/// again.
+///
+/// The step itself, not a whole recording: one would take the real
+/// microphone while the load fails.
 #[tokio::test]
-async fn a_recording_whose_model_fails_to_load_says_so() {
-    use std::time::Duration;
-    // The fixture's backend has no component on disk, so its load fails.
-    let daemon = daemon_loading_on_demand().await;
+async fn a_take_whose_model_fails_to_load_says_so() {
+    let daemon = test_daemon().await;
     let (sim, buf) = crate::output::keyboard::Simulator::capture();
     let mut typer = crate::output::typer::Typer::new(sim);
+    let (claim, _) = daemon.recording.reserve().expect("free");
 
-    let resp = tokio::time::timeout(
-        Duration::from_secs(10),
-        daemon.handle_record_internal(
-            &mut typer,
-            true,
-            RecordingStopMode::ManualOnly,
-            false,
-            AudioTheme::Silent,
-            None,
-        ),
-    )
-    .await
-    .expect("the load failed rather than hung");
+    let ended = daemon
+        .end_take_without_model(claim, &mut typer, true, "whisper-1 did not load: gone")
+        .await;
 
-    assert_eq!(resp.error_code, Some(ErrorCode::ModelNotLoaded));
-    assert!(
-        resp.message
-            .as_deref()
-            .is_some_and(|m| m.starts_with("Could not load the model: whisper-1")),
-        "{:?}",
-        resp.message
+    assert_eq!(
+        ended,
+        Err("Could not load the model: whisper-1 did not load: gone".to_string())
     );
     assert_eq!(
         *buf.lock().unwrap(),
@@ -3635,23 +3603,23 @@ async fn post_processing_loads_on_demand_for_a_transcript() {
     );
 }
 
-/// A recording waits for every stage it will run, loading them together, so
-/// the user never waits after speaking. A later stage failing to load does
-/// not stop the recording: its transcript passes through unchanged.
+/// A recording loads every stage it will run while it captures, so the
+/// models are in by the time its transcript reaches them. A later stage
+/// failing to load does not stop the recording: its transcript passes through
+/// unchanged.
 #[tokio::test]
-async fn a_recording_loads_every_stage_before_it_starts() {
+async fn a_recording_loads_every_stage_while_it_captures() {
     use crate::daemon::events::Topic;
     let daemon = daemon_with_post_processing_on_demand().await;
     seed_loaded_model(&daemon, "whisper-1", "github.com/super-stt/openai").await;
     let mut rx = daemon.events.subscribe(Topic::DaemonStatusChanged);
-    let (_never, cancelled) = tokio::sync::oneshot::channel();
 
-    let waited = daemon.wait_for_pipeline(cancelled).await;
+    let load = daemon
+        .load_for_recording()
+        .await
+        .expect("a model to record with");
 
-    assert_eq!(
-        waited,
-        crate::daemon::model_management::idle::ModelWait::Ready
-    );
+    assert_eq!(load.wait().await, Ok(()));
     assert_eq!(
         statuses_after(&mut rx).await,
         [("loading_model".to_string(), 2), ("ready".to_string(), 2)]

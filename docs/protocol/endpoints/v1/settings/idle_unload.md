@@ -13,8 +13,10 @@ With a value set:
   [`POST /tts/speak`](../tts/speak.md) or
   [`GET /tts/speak/stream`](../tts/speak/stream.md). A transcription loads
   every stage it runs through at once: transcription and, when it is on,
-  post-processing. A daemon-mic recording is accepted at once and starts when
-  its models have loaded, so the user never waits after speaking.
+  post-processing. A daemon-mic recording is accepted and starts capturing at
+  once, while its models load, so the user speaks during the load rather than
+  after it. Its transcript waits only for what is left of the load when
+  capture ends.
   `POST /tts/speak`, and a `POST /stt/transcribe` carrying `audio_data`, answer
   after the load, so a client must not time them out sooner.
   `409 model_not_loaded` then means no model is selected or, for those two,

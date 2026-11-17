@@ -131,7 +131,8 @@ impl Stage for SttStage {
     }
 
     /// A recording runs every stage: the first while it captures, and the
-    /// rest on its final transcript. Waiting for its models counts.
+    /// rest on its final transcript. Its models load while it captures, and
+    /// that counts.
     fn in_use(&self) -> bool {
         self.daemon.recording.is_busy()
     }

@@ -110,8 +110,8 @@ pub struct SuperSTTDaemon {
     pub events: Arc<EventBus>,
     pub audio_theme: Arc<RwLock<AudioTheme>>,
     pub volume: Arc<RwLock<u8>>,
-    // The microphone recording, if one is under way: waiting for its model,
-    // capturing, or transcribing, and how to stop it. See
+    // The microphone recording, if one is under way: starting, capturing, or
+    // transcribing, and how to stop it. See
     // `crate::daemon::recording::state`.
     pub(crate) recording: Arc<crate::daemon::recording::RecordingState>,
     pub download_manager: Arc<DownloadStateManager>,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use super::RecordingSession;
+use crate::daemon::model_management::idle::PipelineLoad;
 use crate::daemon::types::{PreviewFrame, SuperSTTDaemon};
 use crate::output::typer::Typer;
 use anyhow::Result;
@@ -68,21 +69,20 @@ impl SuperSTTDaemon {
         // reaches this recording while its recorder is still being built.
         let (mut recorder, stop_rx) = self.setup_recording_session(claim, cue_theme).await?;
 
-        // The preview cadence and whether previews are forced at all both
-        // come from the loaded model. No model is unreachable here — the
-        // caller refuses to record without one — so the fallback only has to
-        // be harmless.
-        let (model_processing_interval, force_preview_support) = {
-            let guard = self.model.read().await;
-            guard
-                .as_ref()
-                .map_or((std::time::Duration::from_secs(2), false), |loaded| {
-                    (
-                        loaded.definition.processing_interval,
-                        loaded.definition.product.force_preview_support,
-                    )
-                })
-        };
+        // The preview cadence, whether previews are forced at all, and
+        // whether the model streams come from its definition, which the
+        // selected model has before it is loaded. No model is unreachable
+        // here — the caller refuses to record without one — so the fallback
+        // only has to be harmless.
+        let definition = self.transcription_definition().await;
+        let model_processing_interval = definition
+            .as_ref()
+            .map_or(Duration::from_secs(2), |d| d.processing_interval);
+        let force_preview_support = definition
+            .as_ref()
+            .is_some_and(|d| d.product.force_preview_support);
+        #[cfg(feature = "wasm-backends")]
+        let realtime = definition.as_ref().is_some_and(|d| d.realtime);
 
         let actually_typed = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
 
@@ -128,6 +128,8 @@ impl SuperSTTDaemon {
                 recorder_handle,
                 model_processing_interval,
                 force_preview_support,
+                #[cfg(feature = "wasm-backends")]
+                realtime,
                 preview_typing,
                 actually_typed,
                 preview_buffer,
@@ -140,10 +142,12 @@ impl SuperSTTDaemon {
     }
 
     /// Phase 2: poll the recorder task and stream live preview transcriptions
-    /// until the recorder finishes or the timeout is reached.
+    /// until the recorder finishes or the timeout is reached. Previews start
+    /// once the model has loaded; a load that fails ends the take.
     pub(super) async fn run_preview_loop(
         &self,
         session: &RecordingSession,
+        load: &mut PipelineLoad,
         typer: &mut Typer,
         write_mode: bool,
         request_language: Option<&str>,
@@ -189,10 +193,18 @@ impl SuperSTTDaemon {
                 break;
             }
 
+            // Nothing captured from here on could be transcribed.
+            if load.failure().is_some() {
+                warn!("The transcription model failed to load; ending the take");
+                self.recording.stop();
+                break;
+            }
+
             // A model without forced previews still needs this loop for the
             // completion poll and the runaway guard above; only the
-            // transcription work is skipped.
-            if !session.force_preview_support {
+            // transcription work is skipped. So does one still loading: a
+            // pass would find no model to run.
+            if !session.force_preview_support || load.finished().is_none() {
                 continue;
             }
 
@@ -515,6 +527,8 @@ mod tests {
             recorder_handle: tokio::spawn(std::future::pending()),
             model_processing_interval: Duration::from_secs(2),
             force_preview_support: true,
+            #[cfg(feature = "wasm-backends")]
+            realtime: false,
             preview_typing: true,
             actually_typed: Arc::new(std::sync::Mutex::new(String::new())),
             preview_buffer: Arc::new(parking_lot::Mutex::new(VecDeque::from(buffer))),

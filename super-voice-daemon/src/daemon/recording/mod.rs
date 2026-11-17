@@ -8,7 +8,7 @@ mod transcribe;
 
 pub(crate) use state::{Claim, RecordingState, Stopped};
 
-use crate::daemon::model_management::idle::ModelWait;
+use crate::daemon::model_management::idle::PipelineLoad;
 use crate::daemon::types::SuperSTTDaemon;
 use crate::output::notice;
 use crate::{audio::recorder::DaemonAudioRecorder, output::typer::Typer};
@@ -42,6 +42,11 @@ struct RecordingSession {
     // turns it on: every sliding-window pass is a transcription Phase 4
     // repeats, and for an online model a billed one.
     pub(super) force_preview_support: bool,
+    // Whether the model streams the take through one live session
+    // (`ModelDefinition::realtime`): see `realtime.rs`. Known from the
+    // selected model's definition before the model has loaded.
+    #[cfg(feature = "wasm-backends")]
+    pub(super) realtime: bool,
     // Whether previews are typed on screen during this recording: the
     // request's override, or the daemon-wide default when it gave none.
     // Resolved once at the start so a settings change mid-recording neither
@@ -78,6 +83,14 @@ fn audio_for_final_decode<'a>(
         );
     }
     audio
+}
+
+/// Why a take's final decode gave no transcript.
+enum Undecoded {
+    /// The transcription model failed to load: why.
+    NoModel(String),
+    /// The model was in, and the decode failed.
+    Failed(transcribe::FinalFailure),
 }
 
 /// The recording was stopped before it captured anything.
@@ -119,16 +132,17 @@ impl SuperSTTDaemon {
     }
 
     /// Stop the recording on request: a second press of the hotkey, or
-    /// `POST /stt/transcribe/stop`. Cancels one waiting for its model; tells
-    /// one capturing to stop when `manual_stop` (its stop mode) allows it. It
-    /// never starts a recording, whatever happened since the caller looked.
+    /// `POST /stt/transcribe/stop`. Cancels one not yet holding the
+    /// microphone; tells one capturing to stop when `manual_stop` (its stop
+    /// mode) allows it. It never starts a recording, whatever happened since
+    /// the caller looked.
     pub(crate) fn stop_recording(&self, manual_stop: bool) -> DaemonResponse {
         const TRANSCRIBING: &str = "Transcription in progress, please wait";
         if self.recording.is_transcribing() {
             info!("{TRANSCRIBING}");
             return DaemonResponse::success().with_message(TRANSCRIBING.to_string());
         }
-        if !manual_stop && self.recording.is_busy() && !self.recording.is_waiting() {
+        if !manual_stop && self.recording.is_busy() && !self.recording.is_starting() {
             info!("Second press ignored: recording in SilenceOnly mode");
             return DaemonResponse::success()
                 .with_message("Manual stop not enabled in current mode".to_string());
@@ -136,7 +150,7 @@ impl SuperSTTDaemon {
         let message = match self.recording.stop() {
             Stopped::NothingToStop => "No recording in progress",
             Stopped::Cancelled => {
-                info!("Cancelled the recording that was waiting for its model to load");
+                info!("Cancelled the recording before it took the microphone");
                 DaemonResponse::RECORDING_STOP_SIGNAL_MSG
             }
             Stopped::Signalled => {
@@ -160,45 +174,24 @@ impl SuperSTTDaemon {
     ) -> DaemonResponse {
         // One recording at a time. The claim is this recording's for its whole
         // take, and dropping it, however the take ends, frees the microphone.
-        let Some((claim, cancelled)) = self.recording.reserve() else {
+        let Some((claim, _)) = self.recording.reserve() else {
             warn!("Recording request rejected - already recording");
-            let message = if self.recording.is_waiting() {
-                "A recording is already waiting for its model to load."
-            } else {
-                "Recording already in progress. Please wait for current recording to complete."
-            };
-            return DaemonResponse::error_with_code(ErrorCode::RecordingInProgress, message);
+            return DaemonResponse::error_with_code(
+                ErrorCode::RecordingInProgress,
+                "Recording already in progress. Please wait for current recording to complete.",
+            );
         };
 
-        match self.wait_for_pipeline(cancelled).await {
-            ModelWait::Ready => {}
-            ModelWait::Cancelled => {
-                return DaemonResponse::success()
-                    .with_message(DaemonResponse::RECORDING_CANCELLED_MSG.to_string())
-                    .with_transcription(String::new());
-            }
-            // A model is selected and failed to load: say that, not "no
-            // model loaded", which would send the user to load one.
-            ModelWait::LoadFailed(detail) => {
-                warn!("Recording request rejected - its model failed to load");
-                self.surface_failure(
-                    typer,
-                    &notice::Failure::could_not_load_model(&detail),
-                    write_mode,
-                )
-                .await;
-                return DaemonResponse::error_with_code(
-                    ErrorCode::ModelNotLoaded,
-                    &format!("Could not load the model: {detail}"),
-                );
-            }
-        }
-
-        // Fail before capture. With no model loaded the cycle can only end in a
-        // discarded recording, so starting the mic would cost the user a full
-        // take — beeps, speech, and all — to learn nothing. In write mode the
-        // reason lands in the field they are actually looking at.
-        if self.model.read().await.is_none() {
+        // The models load while the take captures: the user speaks during the
+        // load rather than after it, and waits only for what is left of it
+        // when they stop.
+        //
+        // Fail before capture when there is no model to load. The cycle could
+        // only end in a discarded recording, so starting the mic would cost the
+        // user a full take — beeps, speech, and all — to learn nothing. In
+        // write mode the reason lands in the field they are actually looking
+        // at.
+        let Some(load) = self.load_for_recording().await else {
             warn!("Recording request rejected - no model loaded");
             self.surface_failure(typer, &notice::Failure::no_model_loaded(), write_mode)
                 .await;
@@ -206,7 +199,7 @@ impl SuperSTTDaemon {
                 ErrorCode::ModelNotLoaded,
                 "No model is loaded. Load a model and try again.",
             );
-        }
+        };
 
         // Wait for recording to complete and return the transcription.
         match self
@@ -220,6 +213,7 @@ impl SuperSTTDaemon {
                     cue_theme,
                 },
                 request_language,
+                load,
             )
             .await
         {
@@ -247,7 +241,7 @@ impl SuperSTTDaemon {
             }
             // Setup failed before capture began: no `recording_started`/state(true)
             // went out, and the claim was dropped with the cycle.
-            // Stopped after its model had loaded, before it took the microphone.
+            // Stopped before it took the microphone.
             Err(e) if e.is::<RecordingCancelled>() => DaemonResponse::success()
                 .with_message(DaemonResponse::RECORDING_CANCELLED_MSG.to_string())
                 .with_transcription(String::new()),
@@ -281,6 +275,9 @@ impl SuperSTTDaemon {
     /// capture or transcription failed after the cycle started. A failure is
     /// never returned as `Ok` success text and is never typed into the user's
     /// window (finalize already reported it via `transcribing_stopped`).
+    ///
+    /// `load` is the models loading while the take captures. A failed load
+    /// ends the take at once: nothing it captured could be transcribed.
     pub(crate) async fn record_and_transcribe(
         &self,
         claim: Claim<'_>,
@@ -288,6 +285,7 @@ impl SuperSTTDaemon {
         write_mode: bool,
         settings: TakeSettings,
         request_language: Option<&str>,
+        mut load: PipelineLoad,
     ) -> Result<Result<String, String>> {
         info!("Starting direct audio recording in daemon with simplified architecture");
 
@@ -309,14 +307,22 @@ impl SuperSTTDaemon {
         // are simulated by re-transcribing a sliding window — when the model
         // asks for it (`session.force_preview_support`); otherwise the loop only waits for
         // capture to end.
+        //
+        // A realtime session needs its model from the first frame, so a take
+        // whose realtime model is still loading captures until it is in, and
+        // the session then catches up on what was said meanwhile.
         #[cfg(feature = "wasm-backends")]
-        let streamed = self
-            .run_realtime_stream_loop(&session, typer, write_mode, request_language)
-            .await;
+        let streamed = {
+            if session.realtime {
+                self.capture_until_loaded(&session, &mut load).await;
+            }
+            self.run_realtime_stream_loop(&session, typer, write_mode, request_language)
+                .await
+        };
         #[cfg(not(feature = "wasm-backends"))]
         let streamed: Option<String> = None;
         if streamed.is_none() {
-            self.run_preview_loop(&session, typer, write_mode, request_language)
+            self.run_preview_loop(&session, &mut load, typer, write_mode, request_language)
                 .await;
         }
 
@@ -349,6 +355,13 @@ impl SuperSTTDaemon {
             }
         };
 
+        // The model failed to load while the take captured, which ended it.
+        if let Some(detail) = load.failure() {
+            return Ok(self
+                .end_take_without_model(claim, typer, write_mode, &detail)
+                .await);
+        }
+
         // Nothing was spoken. Stopping a recording without speaking is not a
         // failure, so the backend is never asked to transcribe silence and
         // nothing is typed — the cycle simply completes with no text.
@@ -376,14 +389,20 @@ impl SuperSTTDaemon {
         let raw_transcript = match streamed {
             Some(text) => text,
             None => match self
-                .transcribe_final(
+                .transcribe_final_once_loaded(
+                    load,
                     audio_for_final_decode(&full_audio_data, &speech_state),
                     request_language,
                 )
                 .await
             {
                 Ok(text) => text,
-                Err(e) => {
+                Err(Undecoded::NoModel(detail)) => {
+                    return Ok(self
+                        .end_take_without_model(claim, typer, write_mode, &detail)
+                        .await);
+                }
+                Err(Undecoded::Failed(e)) => {
                     // A transcription failure is not typed into the user's
                     // focused window (the old code typed "[STT error: …]"):
                     // finalize reports it via `transcribing_stopped`, and it
@@ -424,6 +443,43 @@ impl SuperSTTDaemon {
         self.finalize_recording_session(claim, &transcription_result, true, None);
 
         Ok(Ok(transcription_result))
+    }
+
+    /// [`transcribe_final`](Self::transcribe_final), once the transcription
+    /// model is in: a take may end before its load does, and the rest of the
+    /// load is the one wait left to the user.
+    async fn transcribe_final_once_loaded(
+        &self,
+        load: PipelineLoad,
+        audio: &[f32],
+        request_language: Option<&str>,
+    ) -> std::result::Result<String, Undecoded> {
+        load.wait().await.map_err(Undecoded::NoModel)?;
+        self.transcribe_final(audio, request_language)
+            .await
+            .map_err(Undecoded::Failed)
+    }
+
+    /// End a take whose transcription model failed to load: it cannot be
+    /// transcribed, so say why, as the failure notice of a recording refused
+    /// for it did before recordings captured during the load.
+    pub(in crate::daemon) async fn end_take_without_model(
+        &self,
+        claim: Claim<'_>,
+        typer: &mut Typer,
+        write_mode: bool,
+        detail: &str,
+    ) -> Result<String, String> {
+        warn!("Recording ended - its model failed to load: {detail}");
+        let error = format!("Could not load the model: {detail}");
+        self.finalize_recording_session(claim, "", false, Some(error.clone()));
+        self.surface_failure(
+            typer,
+            &notice::Failure::could_not_load_model(detail),
+            write_mode,
+        )
+        .await;
+        Err(error)
     }
 
     /// Take the microphone on `claim` and create the audio recorder. Returns
