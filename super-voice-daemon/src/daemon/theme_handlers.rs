@@ -23,6 +23,7 @@ impl SuperSTTDaemon {
             );
         };
         self.set_audio_theme(theme);
+        self.publish_shared_setting_changed("audio_theme");
 
         // Persist the change to disk so it survives a restart. The
         // handler is sync; spawn a task to mutate the config + flush.
@@ -69,6 +70,7 @@ impl SuperSTTDaemon {
     #[must_use]
     pub fn handle_set_volume(&self, volume: u8) -> DaemonResponse {
         self.set_volume(volume);
+        self.publish_shared_setting_changed("volume");
 
         let config_clone = Arc::clone(&self.config);
         tokio::spawn(async move {

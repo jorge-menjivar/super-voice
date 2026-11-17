@@ -61,6 +61,7 @@ impl SuperSTTDaemon {
         let persist = self
             .set_config_field(|c| c.transcription.preview_typing_enabled = enabled)
             .await;
+        self.publish_settings_changed("preview_typing");
 
         let state = if enabled { "enabled" } else { "disabled" };
         info!("Preview typing {state}");
@@ -88,6 +89,7 @@ impl SuperSTTDaemon {
         let persist = self
             .set_config_field(|c| c.transcription.recording_stop_mode = mode)
             .await;
+        self.publish_settings_changed("recording_stop_mode");
 
         info!("Recording stop mode set to {mode}");
         Self::settings_saved(
@@ -111,6 +113,8 @@ impl SuperSTTDaemon {
         let persist = self
             .set_config_field(|c| c.synthesis.read_method = method)
             .await;
+        // Text to speech's setting, so its announcement names that feature.
+        self.tts.publish_settings_changed("read_method");
 
         info!("Read method set to {method}");
         Self::settings_saved(
@@ -131,6 +135,7 @@ impl SuperSTTDaemon {
         let persist = self
             .set_config_field(|c| c.transcription.write_method = method)
             .await;
+        self.publish_settings_changed("write_method");
         // Invalidate the cached simulator so the next recording creates a fresh one.
         *self.simulator.write().await = None;
 
@@ -218,6 +223,8 @@ impl SuperSTTDaemon {
         let persist = self
             .set_config_field(|c| c.notification_method = method)
             .await;
+        // Both features' failures are reported this way.
+        self.publish_shared_setting_changed("notification_method");
 
         info!("Notification method set to {method}");
         Self::settings_saved(

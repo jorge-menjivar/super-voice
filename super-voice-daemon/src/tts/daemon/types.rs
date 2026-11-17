@@ -218,10 +218,10 @@ impl SuperTTSDaemon {
     /// derived state — e.g. a per-model language that follows the global
     /// value must re-fetch its resolution block. Reuses the
     /// `daemon_status_changed` topic clients already subscribe to;
-    /// `setting` names what changed (currently `"language"`,
-    /// `"update_check_enabled"`, or `"update_beta_optin"` — see
-    /// `docs/protocol/endpoints/v1/events.md`). Shared by the language and
-    /// settings handlers so the event shape can't drift between call sites.
+    /// `setting` names what changed: a per-model `"language"` or
+    /// `"read_method"` — see `docs/protocol/endpoints/v1/events.md`. Shared
+    /// by the language and settings handlers so the event shape can't drift
+    /// between call sites.
     pub fn publish_settings_changed(&self, setting: &str) {
         self.events
             .publish_synthesis_status(DaemonStatusEvent::SettingsChanged {
