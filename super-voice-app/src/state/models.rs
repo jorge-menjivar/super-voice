@@ -86,7 +86,7 @@ impl Section {
             Self::Shortcuts => crate::fl!("shortcuts"),
             Self::Models => crate::fl!("models"),
             Self::Library => crate::fl!("library"),
-            Self::Customization => crate::fl!("customization"),
+            Self::Customization => crate::fl!("settings"),
             Self::Connection => crate::fl!("connection"),
             Self::Updates => crate::fl!("updates"),
         }
@@ -141,7 +141,7 @@ impl Page {
             Self::Voices => crate::fl!("voices"),
             Self::ReadAloud => crate::fl!("read-aloud-page"),
             Self::Shortcuts => crate::fl!("shortcuts"),
-            Self::Customization => crate::fl!("customization"),
+            Self::Customization => crate::fl!("settings"),
             Self::Connection => crate::fl!("connection"),
             Self::Updates => crate::fl!("updates"),
         }

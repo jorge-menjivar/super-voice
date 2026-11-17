@@ -73,7 +73,6 @@ copied-from-disk = copied from disk
 copy = Copy
 counts-down-before-typing-so-you-can = Counts down before typing, so you can switch to the app you actually dictate into.
 current-version = Current version
-customization = Customization
 default-language-for-models-that-support-it = Default language for models that support it
 delete = Delete
 deleting-progress = Deleting…

@@ -51,9 +51,9 @@ fn build_nav() -> nav_bar::Model {
         .icon(icons::phosphor(icons::KEYBOARD))
         .divider_above(true);
 
-    // Shortcuts opens the group on Linux; Customization does elsewhere.
+    // Shortcuts opens the group on Linux; Settings does elsewhere.
     nav.insert()
-        .text(crate::fl!("customization"))
+        .text(crate::fl!("settings"))
         .data::<Section>(Section::Customization)
         .icon(icons::phosphor(icons::GEAR))
         .divider_above(!cfg!(target_os = "linux"));

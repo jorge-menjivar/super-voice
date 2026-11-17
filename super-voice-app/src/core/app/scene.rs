@@ -149,10 +149,7 @@ const SCENES: &[(&str, Scene)] = &[
             ..Scene::page(Page::ReadAloud, Stt::Running)
         },
     ),
-    (
-        "customization",
-        Scene::page(Page::Customization, Stt::Running),
-    ),
+    ("settings", Scene::page(Page::Customization, Stt::Running)),
     ("connection", Scene::page(Page::Connection, Stt::Running)),
     ("updates", Scene::page(Page::Updates, Stt::Running)),
     // No shot: what `just screenshots` reads first, and how it puts speech to

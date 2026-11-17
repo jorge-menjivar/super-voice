@@ -124,7 +124,7 @@ pub fn page<'a>(
     blocks.push(notifications_section(notification_method));
     blocks.push(memory_section(idle_unload_secs));
 
-    page_layout(crate::fl!("customization"), settings::view_column(blocks))
+    page_layout(crate::fl!("settings"), settings::view_column(blocks))
 }
 
 /// Notifications section: how either feature's failures reach the user. One

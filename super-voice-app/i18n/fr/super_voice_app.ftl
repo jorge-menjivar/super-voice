@@ -73,7 +73,6 @@ copied-from-disk = copié depuis le disque
 copy = Copier
 counts-down-before-typing-so-you-can = Lance un compte à rebours avant la saisie pour vous laisser rejoindre l’application dans laquelle vous souhaitez dicter.
 current-version = Version actuelle
-customization = Personnalisation
 default-language-for-models-that-support-it = Langue par défaut pour les modèles compatibles
 delete = Supprimer
 deleting-progress = Suppression…
