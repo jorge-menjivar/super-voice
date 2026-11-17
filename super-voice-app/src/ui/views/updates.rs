@@ -117,15 +117,16 @@ fn version_section(state: &UpdateState) -> Element<'_, Message> {
         .into()
 }
 
-/// Settings section: the two togglers, both disabled while a run is active.
+/// Automatic Updates section: whether the daemon checks daily, and whether
+/// betas count. Both disabled while a run is active.
 fn settings_section(state: &UpdateState) -> Element<'_, Message> {
     let run_active = state.run.is_some();
 
     settings::section()
-        .title(crate::fl!("settings"))
+        .title(crate::fl!("automatic-updates"))
         .add(
-            settings::item::builder(crate::fl!("automatic-update-checks"))
-                .description(crate::fl!("periodically-check-for-new-releases-and-notify"))
+            settings::item::builder(crate::fl!("check-daily"))
+                .description(crate::fl!("check-daily-description"))
                 .control(
                     widget::toggler(state.auto_check_enabled.unwrap_or(true)).on_toggle_maybe(
                         (!run_active)
@@ -134,10 +135,8 @@ fn settings_section(state: &UpdateState) -> Element<'_, Message> {
                 ),
         )
         .add(
-            settings::item::builder(crate::fl!("receive-beta-updates"))
-                .description(crate::fl!(
-                    "consider-prerelease-versions-when-checking-for-updates"
-                ))
+            settings::item::builder(crate::fl!("include-betas"))
+                .description(crate::fl!("include-betas-description"))
                 .control(
                     // Inert while the write and its re-check are in flight:
                     // the switch has already moved, and a second press would
