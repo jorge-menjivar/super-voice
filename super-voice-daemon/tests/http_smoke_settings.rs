@@ -482,3 +482,50 @@ async fn settings_scope_endpoints() {
     );
     assert_eq!(body["message"], "scope_denied");
 }
+
+/// A request refused before any endpoint reads it answers in the same JSON
+/// envelope as every other error, with an `error_code` a client can switch on.
+/// axum answered these in plain text: a volume that is not an integer was a
+/// `422` whose body was a sentence, which a client could only show as "daemon
+/// returned HTTP 422".
+#[tokio::test]
+async fn a_request_that_does_not_parse_is_answered_in_the_envelope() {
+    let (_guard, http_socket) = start_daemon().await;
+    let token = http_client::auth_request(http_socket.clone(), "malformed smoke", &["settings"])
+        .await
+        .expect("auth_request")
+        .session_token;
+
+    for (method, path, body) in [
+        (
+            Method::POST,
+            "/settings/volume",
+            Some(serde_json::json!({ "volume": "loud" })),
+        ),
+        (
+            Method::POST,
+            "/settings/volume",
+            Some(serde_json::json!({})),
+        ),
+        (Method::GET, "/stt/pipeline/first/model", None),
+    ] {
+        let (status, json) = common::request(
+            &http_socket,
+            method.clone(),
+            path,
+            Some(&token),
+            body.as_ref(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{method} {path}: {json}");
+        assert_eq!(json["status"], "error", "{method} {path}: {json}");
+        assert_eq!(
+            json["error_code"], "invalid_value",
+            "{method} {path}: {json}"
+        );
+        assert!(
+            json["message"].as_str().is_some_and(|m| !m.is_empty()),
+            "{method} {path}: the message says what did not parse: {json}"
+        );
+    }
+}

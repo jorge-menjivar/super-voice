@@ -225,5 +225,5 @@ not. Deleting a voice mid-session does not stop an utterance already in flight.
 | 400  | `clip_too_long`             | The recording is longer than 120 s.                                          |
 | 403  | `scope_denied`              | The token does not hold `voices`.                                            |
 | 404  | `not_found`                 | No voice with that id.                                                       |
-| 413  | —                           | The upload exceeded 48 MiB and was rejected before it was read.              |
+| 413  | `payload_too_large`         | The upload exceeded 48 MiB and was rejected before it was read.              |
 | 503  | `voice_library_unavailable` | The library could not be read or written.                                    |

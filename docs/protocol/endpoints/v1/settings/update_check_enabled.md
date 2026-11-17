@@ -53,9 +53,9 @@ Content-Type: application/json
 | 403  | `scope_denied`    | Token lacks the `settings` scope         |
 
 `enabled` is required and must be a bool. A malformed body (missing or wrong
-type) fails JSON parsing before the request reaches the handler and gets a
-generic `400` rejection, not a classified `error_code` — the same behavior as
-[`/settings/preview_typing`](./preview_typing.md), the other boolean toggle.
+type) is `400 invalid_value`, its `message` saying what did not parse — the
+same as [`/settings/preview_typing`](./preview_typing.md), the other boolean
+toggle; see [error responses](../../../transport.md#error-responses).
 
 ## `GET /settings/update_check_enabled`
 
