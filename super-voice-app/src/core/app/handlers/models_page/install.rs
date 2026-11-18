@@ -105,7 +105,20 @@ impl AppModel {
         message: ModelsPageMessage,
     ) -> Task<cosmic::Action<Message>> {
         match message {
+            ModelsPageMessage::AskUninstall(source) => {
+                // The menu that asked goes; the dialog takes its place.
+                self.models_page.installed_menu_open = None;
+                self.models_page.pending_uninstall = Some(source);
+                Task::none()
+            }
+
+            ModelsPageMessage::CancelUninstall => {
+                self.models_page.pending_uninstall = None;
+                Task::none()
+            }
+
             ModelsPageMessage::UninstallBackend(source) => {
+                self.models_page.pending_uninstall = None;
                 // Clear any stale failure so the row reads "in progress" on retry.
                 self.registry.uninstall_errors.remove(&source);
                 let s = source.clone();

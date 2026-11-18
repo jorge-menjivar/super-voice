@@ -31,6 +31,9 @@ pub struct ModelsPageState {
     /// A framework picked whose build is not installed: asked about in a
     /// dialog, then downloaded, then switched to.
     pub pending_build: Option<PendingBuild>,
+    /// The backend whose uninstall the user asked for, while the dialog
+    /// asking them to confirm it is up.
+    pub pending_uninstall: Option<String>,
 }
 
 /// A framework picked for a stage's model whose backend does not have that
@@ -73,6 +76,7 @@ impl Default for ModelsPageState {
             installed_filters: crate::state::registry::InstalledFilters::default(),
             pipeline_step: crate::state::Stage::Transcription,
             pending_build: None,
+            pending_uninstall: None,
         }
     }
 }

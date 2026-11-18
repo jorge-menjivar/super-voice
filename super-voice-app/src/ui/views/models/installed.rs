@@ -248,7 +248,7 @@ pub(super) fn installed_overflow_menu(source: &str) -> Element<'static, Message>
     let col = widget::column::with_capacity(1).push(super::surface::menu_item(
         icons::X,
         crate::fl!("uninstall"),
-        Message::ModelsPage(ModelsPageMessage::UninstallBackend(source.to_string())),
+        Message::ModelsPage(ModelsPageMessage::AskUninstall(source.to_string())),
     ));
 
     super::surface::menu_surface(col, 190.0)

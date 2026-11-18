@@ -243,7 +243,11 @@ pub enum ModelsPageMessage {
     },
     /// User clicked Update on an Installed-tab card.
     UpdateBackend(String),
-    /// User clicked Uninstall.
+    /// User chose Uninstall in a card's menu: ask before doing it.
+    AskUninstall(String),
+    /// User answered the uninstall question with Cancel.
+    CancelUninstall,
+    /// User confirmed the uninstall.
     UninstallBackend(String),
     /// An uninstall request failed; carries the backend `source` and a
     /// human-readable error to surface on the installed card.
