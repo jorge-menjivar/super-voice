@@ -109,7 +109,7 @@ fails on every utterance that follows. Offer what
 [`/tts/voice/list`](#get-ttspipelinestagemodelmodelvoicelist) returns, plus a free-text
 `desc:<text>` when `kinds` includes `described`.
 
-An empty string is `400 invalid_request`: clearing is `DELETE`, which is a
+An empty string is `400 invalid_value`: clearing is `DELETE`, which is a
 different act and answers differently.
 
 The new value applies to the next utterance; one already being spoken finishes
@@ -161,8 +161,7 @@ yet: record one on [`POST /tts/voice`](../voice.md#post-ttsvoice) first.
 
 | Status | `message` | When |
 |---|---|---|
-| 400 | `invalid_request` | `voice` was empty on `POST`. |
-| 400 | `invalid_value`   | The voice is not one this model can resolve. |
+| 400 | `invalid_value`   | `voice` was empty on `POST`, or is not one this model can resolve. |
 | 400 | `invalid_backend` | The stage has no backend selected. |
 | 404 | `unknown_stage`   | No such pipeline stage. |
 | 404 | `unknown_model`   | This stage's backend serves no such model. |

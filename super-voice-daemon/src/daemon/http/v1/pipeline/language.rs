@@ -146,7 +146,7 @@ Overridden in turn by a `language` field in a single `POST /stt/transcribe` body
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "Override set.", body = ModelLanguageState),
-        (status = 400, description = "The body was empty (`invalid_request`), this model does not serve that language (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).", body = ErrorEnvelope),
+        (status = 400, description = "The body was empty (`invalid_value`), this model does not serve that language (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
         (status = 404, description = "No such stage (`unknown_stage`), or this stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
@@ -159,7 +159,11 @@ async fn set_model_language(
     axum::Json(body): axum::Json<LanguageBody>,
 ) -> Response {
     if body.language.is_empty() {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
+        return json_error_msg(
+            StatusCode::BAD_REQUEST,
+            "invalid_value",
+            "`language` must be a tag the model serves, or `auto`. To remove the override, DELETE this path.",
+        );
     }
     let source = match resolve_source(&s, stage, &model).await {
         Ok(source) => source,

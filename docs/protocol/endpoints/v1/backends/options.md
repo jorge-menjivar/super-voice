@@ -210,7 +210,7 @@ Authorization: Bearer …64hex…
 
 | HTTP | `message`         | Meaning                                              |
 |------|-------------------|------------------------------------------------------|
-| 400  | `invalid_request` | Malformed body, or an empty `value`.                 |
+| 400  | `invalid_value`   | Malformed body, or an empty `value`.                 |
 | 400  | `invalid_value`   | The option declares `choices` and the posted value is not one of them (the `message` names the values on offer); or the value is one a request header cannot carry — over 4000 characters, or containing a control character. |
 | 401  | `invalid_session` | Token unknown / expired / `exe_changed`.             |
 | 403  | `scope_denied`    | Token lacks the `settings` scope.                    |

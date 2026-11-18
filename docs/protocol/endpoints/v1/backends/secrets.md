@@ -164,7 +164,7 @@ Authorization: Bearer …64hex…
 
 | HTTP | `message`             | Meaning                                                        |
 |------|-----------------------|----------------------------------------------------------------|
-| 400  | `invalid_request`     | Malformed body, or an empty `value` on `POST`.                |
+| 400  | `invalid_value`       | Malformed body, or an empty `value` on `POST`.                |
 | 401  | `invalid_session`     | Token unknown / expired / `exe_changed`.                      |
 | 403  | `scope_denied`        | Token lacks the `secrets` scope.                              |
 | 404  | `unknown_backend`     | No installed backend has that `source`.                      |
