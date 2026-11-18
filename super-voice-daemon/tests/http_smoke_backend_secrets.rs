@@ -216,7 +216,7 @@ async fn undeclared_secret_is_404() {
         "undeclared secret must be 404: {body}"
     );
     assert_eq!(
-        body["message"], "unknown_secret",
+        body["error_code"], "unknown_secret",
         "error code for undeclared secret: {body}"
     );
 }

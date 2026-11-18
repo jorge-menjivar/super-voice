@@ -65,6 +65,17 @@ pub enum ErrorCode {
     // --- Other classes. ---
     /// The addressed resource does not exist.
     NotFound,
+    /// The token lacks the scope the route needs. Built by the auth guard,
+    /// which also keeps the identifier in `message` for older clients.
+    ScopeDenied,
+    /// This client sent too many requests too fast; back off and retry.
+    RateLimited,
+    /// `POST /settings/write_method/test`: none of the ways to type text
+    /// could be set up here, so nothing was typed.
+    WriteMethodUnavailable,
+    /// `POST /settings/write_method/test`: a way to type was set up, but the
+    /// keystrokes did not reach the focused window.
+    TypingFailed,
     /// An unclassified server-side failure (the default for un-coded errors).
     Internal,
 
@@ -95,7 +106,11 @@ impl ErrorCode {
             | Self::UnsupportedLanguage
             | Self::InvalidValue => 400,
             Self::NotFound => 404,
-            Self::Internal | Self::Unknown => 500,
+            Self::ScopeDenied => 403,
+            Self::RateLimited => 429,
+            Self::WriteMethodUnavailable | Self::TypingFailed | Self::Internal | Self::Unknown => {
+                500
+            }
         }
     }
 }

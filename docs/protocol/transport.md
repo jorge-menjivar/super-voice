@@ -122,6 +122,7 @@ Content-Type: application/json
 
 {
   "status": "error",
+  "error_code": "invalid_session",
   "message": "invalid_session",
   "data": { "reason": "expired" }
 }
@@ -289,9 +290,11 @@ method_not_allowed`, its `Allow` header listing the methods it does take; the
 `message` names the method and the path.
 
 > **Compatibility.** `error_code` was introduced after `message`. Earlier
-> clients switched on `message`, and the auth identifiers (`invalid_session`,
-> `scope_denied`) still appear there verbatim for that reason. New clients
-> should switch on `error_code`.
+> clients switched on `message`, so a few identifiers still appear there
+> verbatim as well as in `error_code`: the auth errors (`invalid_session`,
+> `scope_denied`, `rate_limited`) and `/stt/transcribe`'s `409
+> recording_in_progress` and `model_not_loaded`. New clients should switch on
+> `error_code`.
 
 ## The TCP listener
 

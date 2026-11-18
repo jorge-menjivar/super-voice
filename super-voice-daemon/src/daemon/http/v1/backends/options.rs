@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{decode_source, find_installed_backend};
+use super::{decode_source, find_installed_backend, unknown_backend, unknown_option};
 use crate::daemon::http::internal::helpers::dispatch::dispatch_command;
 use crate::daemon::http::state::AppState;
-use crate::daemon::http::v1::wire::{json_error, json_error_msg, ok};
+use crate::daemon::http::v1::wire::{json_error_msg, ok};
 use crate::daemon::http::wire::{ErrorEnvelope, ReasonEnvelope};
 use crate::stt_models::backends::DiscoveredBackend;
 use crate::stt_models::backends::manifest::OptionType;
@@ -136,7 +136,7 @@ declared in its manifest. Credentials are not options; those are secrets, at \
 async fn list_options(State(s): State<AppState>, Path(source): Path<String>) -> Response {
     let source = decode_source(&source);
     let Some(b) = find_installed_backend(&s, &source).await else {
-        return json_error(StatusCode::NOT_FOUND, "unknown_backend");
+        return unknown_backend(&source);
     };
     let cfg = s.daemon.config.read().await;
     let out: Vec<_> = b
@@ -182,7 +182,7 @@ async fn get_option(
 
 async fn get_option_inner(s: AppState, source: String, name: String) -> Response {
     let Some(b) = find_installed_backend(&s, &source).await else {
-        return json_error(StatusCode::NOT_FOUND, "unknown_backend");
+        return unknown_backend(&source);
     };
     let cfg = s.daemon.config.read().await;
     match effective(&b, cfg.backend_option(&source, &name), &name) {
@@ -192,7 +192,7 @@ async fn get_option_inner(s: AppState, source: String, name: String) -> Response
             value: v.value,
             default: v.default,
         }),
-        None => json_error(StatusCode::NOT_FOUND, "unknown_option"),
+        None => unknown_option(&source, &name),
     }
 }
 
@@ -400,8 +400,8 @@ async fn guard_not_a_choice(
 /// `None` when the option is present and a write can proceed.
 async fn guard_missing(s: &AppState, source: &str, name: &str) -> Option<Response> {
     match find_installed_backend(s, source).await {
-        None => Some(json_error(StatusCode::NOT_FOUND, "unknown_backend")),
+        None => Some(unknown_backend(source)),
         Some(b) if b.options.iter().any(|o| o.name == name) => None,
-        Some(_) => Some(json_error(StatusCode::NOT_FOUND, "unknown_option")),
+        Some(_) => Some(unknown_option(source, name)),
     }
 }

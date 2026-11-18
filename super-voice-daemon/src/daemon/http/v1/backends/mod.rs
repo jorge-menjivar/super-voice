@@ -41,6 +41,33 @@ use super_voice_shared::registry::UninstallResponse;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+/// `404 unknown_backend`: no installed backend has `source`.
+pub(crate) fn unknown_backend(source: &str) -> Response {
+    crate::daemon::http::v1::wire::json_error_msg(
+        StatusCode::NOT_FOUND,
+        "unknown_backend",
+        &format!("No installed backend has the source `{source}`."),
+    )
+}
+
+/// `404 unknown_option`: the backend declares no option `name`.
+pub(crate) fn unknown_option(source: &str, name: &str) -> Response {
+    crate::daemon::http::v1::wire::json_error_msg(
+        StatusCode::NOT_FOUND,
+        "unknown_option",
+        &format!("The backend `{source}` declares no option named `{name}`."),
+    )
+}
+
+/// `404 unknown_secret`: the backend declares no secret `name`.
+pub(crate) fn unknown_secret(source: &str, name: &str) -> Response {
+    crate::daemon::http::v1::wire::json_error_msg(
+        StatusCode::NOT_FOUND,
+        "unknown_secret",
+        &format!("The backend `{source}` declares no secret named `{name}`."),
+    )
+}
+
 /// Percent-decode a `{backend_id}` path segment (e.g. `github.com%2Facme%2Fx`).
 pub(crate) fn decode_source(raw: &str) -> String {
     urlencoding::decode(raw).map_or_else(|_| raw.to_string(), std::borrow::Cow::into_owned)
@@ -138,7 +165,7 @@ pub(crate) async fn uninstall_backend(
 ) -> Response {
     // Uninstall is the inverse of install, so it shares the registry error
     // envelope (`{ "error": <code> }`) rather than hand-rolling its own shape.
-    use crate::daemon::http::v1::registry::{registry_error, registry_error_msg};
+    use crate::daemon::http::v1::registry::registry_error_msg;
 
     // URL-decode the source param (e.g. "github.com%2Fjorge-menjivar%2Fsuper-stt").
     let source = urlencoding::decode(&source_encoded)
@@ -150,7 +177,11 @@ pub(crate) async fn uninstall_backend(
     // state the session still depends on.
     // Speech counts too: the backend may be the one speaking.
     if s.daemon.switch_guard().is_some() || s.daemon.tts.is_busy() {
-        return registry_error(StatusCode::CONFLICT, "backend_busy");
+        return registry_error_msg(
+            StatusCode::CONFLICT,
+            "backend_busy",
+            "A recording, a realtime session or speech is under way. Uninstall the backend once it ends.",
+        );
     }
 
     // Look up the installed backend directory from the in-memory catalog.
@@ -163,7 +194,11 @@ pub(crate) async fn uninstall_backend(
     };
 
     let Some(dir) = install_dir else {
-        return registry_error(StatusCode::NOT_FOUND, "not_found");
+        return registry_error_msg(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("No installed backend has the source `{source}`."),
+        );
     };
 
     // Check whether this is the active backend before removing.

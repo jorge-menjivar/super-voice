@@ -856,3 +856,19 @@ fn set_model_refuses_an_empty_or_missing_model() {
         );
     }
 }
+
+/// An unknown value for an enum setting names the field and lists what it
+/// takes, not the Rust type behind it.
+#[test]
+fn an_unknown_stop_mode_lists_the_ones_there_are() {
+    let request = make_request(
+        "record",
+        Some(json!({ "write_mode": false, "stop_mode": "manual" })),
+    );
+    let err = Command::try_from(request).expect_err("`manual` is not a stop mode");
+    assert_eq!(
+        err,
+        "`stop_mode` must be one of silence_only, silence_and_manual, manual_only, not `manual`."
+    );
+    assert!(!err.contains("RecordingStopMode"), "{err}");
+}

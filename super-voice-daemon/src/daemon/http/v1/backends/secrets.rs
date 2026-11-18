@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{decode_source, find_installed_backend};
+use super::{decode_source, find_installed_backend, unknown_backend, unknown_secret};
 use crate::daemon::http::state::AppState;
-use crate::daemon::http::v1::wire::{json_error, json_error_msg, ok};
+use crate::daemon::http::v1::wire::{json_error_msg, ok};
 use crate::daemon::http::wire::{ErrorEnvelope, ReasonEnvelope};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -88,7 +88,7 @@ surface: a token granted `settings` cannot reach it.",
 async fn list_secrets(State(s): State<AppState>, Path(source): Path<String>) -> Response {
     let source = decode_source(&source);
     let Some(backend) = find_installed_backend(&s, &source).await else {
-        return json_error(StatusCode::NOT_FOUND, "unknown_backend");
+        return unknown_backend(&source);
     };
     let mut out = Vec::with_capacity(backend.secrets.len());
     for sec in &backend.secrets {
@@ -134,8 +134,8 @@ async fn get_secret(
 ) -> Response {
     let source = decode_source(&source);
     match declared_secret(&s, &source, &name).await {
-        Guard::NoBackend => json_error(StatusCode::NOT_FOUND, "unknown_backend"),
-        Guard::NoItem => json_error(StatusCode::NOT_FOUND, "unknown_secret"),
+        Guard::NoBackend => unknown_backend(&source),
+        Guard::NoItem => unknown_secret(&source, &name),
         Guard::Ok => {
             let configured = s.daemon.secrets.has_backend_secret(&source, &name);
             ok(&SecretConfigured {
@@ -191,8 +191,8 @@ async fn set_secret(
         );
     }
     match declared_secret(&s, &source, &name).await {
-        Guard::NoBackend => json_error(StatusCode::NOT_FOUND, "unknown_backend"),
-        Guard::NoItem => json_error(StatusCode::NOT_FOUND, "unknown_secret"),
+        Guard::NoBackend => unknown_backend(&source),
+        Guard::NoItem => unknown_secret(&source, &name),
         Guard::Ok => {
             let resp = s
                 .daemon
@@ -233,8 +233,8 @@ async fn delete_secret(
 ) -> Response {
     let source = decode_source(&source);
     match declared_secret(&s, &source, &name).await {
-        Guard::NoBackend => json_error(StatusCode::NOT_FOUND, "unknown_backend"),
-        Guard::NoItem => json_error(StatusCode::NOT_FOUND, "unknown_secret"),
+        Guard::NoBackend => unknown_backend(&source),
+        Guard::NoItem => unknown_secret(&source, &name),
         Guard::Ok => {
             let resp = s.daemon.handle_clear_backend_secret(source, name).await;
             secret_result(&resp, false)

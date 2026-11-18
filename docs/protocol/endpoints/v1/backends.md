@@ -213,10 +213,11 @@ backend serving several roles.
 
 ### Failure modes
 
-Errors use the registry error envelope `{ "error": <code> }` (a stable,
-machine-readable `code`), matching `POST /registry/backend/install`:
+Errors carry their code in `error_code`, as every error does, and in `error`
+as well for clients older than `error_code`, matching
+`POST /registry/backend/install`. The `message` says what went wrong:
 
-| Status | `error` | Cause |
+| Status | `error_code` | Cause |
 |---|---|---|
 | `404` | `not_found` | No backend with that source is installed. |
 | `409` | `backend_busy` | A recording, a real-time session or an utterance is active; the backend set cannot be mutated until it finishes. |

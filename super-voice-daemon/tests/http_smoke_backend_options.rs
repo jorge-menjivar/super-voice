@@ -363,7 +363,7 @@ async fn undeclared_option_is_404() {
         "undeclared option must be 404: {body}"
     );
     assert_eq!(
-        body["message"], "unknown_option",
+        body["error_code"], "unknown_option",
         "error code for undeclared option: {body}"
     );
 }
@@ -446,7 +446,7 @@ async fn unknown_backend_is_404() {
         "unknown backend must be 404: {body}"
     );
     assert_eq!(
-        body["message"], "unknown_backend",
+        body["error_code"], "unknown_backend",
         "error code for unknown backend: {body}"
     );
 }
