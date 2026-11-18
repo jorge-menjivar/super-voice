@@ -55,6 +55,12 @@ impl SuperSTTDaemon {
         if !self.config.read().await.post_processor.enabled {
             return text;
         }
+        // Before the load, so a skip costs nothing: a processor declaring only
+        // other languages would load just to be passed over.
+        if let Some(lang) = self.post_processor_lacks(language.as_deref()).await {
+            info!("The post-processor does not list {lang}; using the raw transcript");
+            return text;
+        }
         // The stage is used as any other is: loaded first when models are
         // unloaded on idle. A load that fails is logged and announced, and
         // the text passes through.
@@ -109,6 +115,49 @@ impl SuperSTTDaemon {
                 raw
             }
         }
+    }
+}
+
+impl SuperSTTDaemon {
+    /// The transcript's language, when it is known and the selected
+    /// post-processor does not list it.
+    ///
+    /// A post-processor rewrites text it was built for: an English-only one
+    /// handed Spanish strips its punctuation and mangles words it takes for
+    /// misspellings ("huevos" came out "hueos"). Its manifest says which
+    /// languages it takes, the same way a transcription model's does, and a
+    /// transcript in another passes through as transcribed. The policy is the
+    /// one for a failing processor: the user's words are never worse.
+    ///
+    /// `None` when the language is unknown — no language (the model chose) or
+    /// `auto` (it detected one it does not report) — since the processor
+    /// ran on those before there was a check, and when no post-processor is
+    /// selected or its backend is gone, which the load then reports.
+    async fn post_processor_lacks(&self, language: Option<&str>) -> Option<String> {
+        let lang = language.filter(|l| !l.eq_ignore_ascii_case("auto"))?;
+        let (source, model) = {
+            let config = self.config.read().await;
+            let pp = &config.post_processor;
+            (pp.source.clone(), pp.model.clone())
+        };
+        let def = self.find_model_definition(&source, &model).await?;
+        (!lists_language(&def, lang)).then(|| lang.to_string())
+    }
+}
+
+/// Whether `def` takes text in `tag`, by its manifest: its
+/// `supported_languages` when it is multilingual, its `primary_language`
+/// otherwise. Compared on the primary subtag, so a processor listing `es`
+/// takes `es-MX`, and one listing `en` takes `en-GB`. A multilingual model that
+/// lists no languages takes any.
+fn lists_language(def: &crate::stt_models::ModelDefinition, tag: &str) -> bool {
+    let primary = |t: &str| t.split(['-', '_']).next().unwrap_or(t).to_ascii_lowercase();
+    let want = primary(tag);
+    if def.is_multilingual {
+        def.supported_languages.is_empty()
+            || def.supported_languages.iter().any(|l| primary(l) == want)
+    } else {
+        primary(&def.primary_language) == want
     }
 }
 
@@ -263,5 +312,46 @@ mod tests {
             Arc::strong_count(&daemon.post_processor) >= 1,
             "the slot is untouched"
         );
+    }
+
+    fn processor(multilingual: bool, primary: &str, supported: &[&str]) -> ModelDefinition {
+        ModelDefinition {
+            name: "cleanup".to_string(),
+            source: "github.com/x/cleanup".to_string(),
+            is_multilingual: multilingual,
+            primary_language: primary.to_string(),
+            supported_languages: supported.iter().map(ToString::to_string).collect(),
+            estimated_vram_bytes: 0,
+            processing_interval: std::time::Duration::from_secs(1),
+            supported_devices: vec![Device::None],
+            realtime: false,
+            product: super_voice_registry_types::manifest::VoiceModel::new(
+                ModelRole::PostProcessor,
+            ),
+            provider: None,
+        }
+    }
+
+    /// An English-only processor takes English in any region and nothing
+    /// else; the tag is compared on its primary subtag, either case.
+    #[test]
+    fn an_english_only_processor_takes_english_only() {
+        let en = processor(false, "en", &["en"]);
+        assert!(super::lists_language(&en, "en"));
+        assert!(super::lists_language(&en, "en-GB"));
+        assert!(super::lists_language(&en, "EN"));
+        assert!(!super::lists_language(&en, "es"));
+        assert!(!super::lists_language(&en, "es-MX"));
+    }
+
+    /// A multilingual processor takes what it lists, and one listing nothing
+    /// takes anything.
+    #[test]
+    fn a_multilingual_processor_takes_what_it_lists() {
+        let two = processor(true, "en", &["en", "es"]);
+        assert!(super::lists_language(&two, "es-MX"));
+        assert!(!super::lists_language(&two, "fr"));
+        let any = processor(true, "en", &[]);
+        assert!(super::lists_language(&any, "fr"));
     }
 }

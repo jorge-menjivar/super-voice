@@ -218,6 +218,16 @@ position.
 than 30 seconds, the **raw transcript is delivered unchanged** and the failure is
 logged. A cleanup step that is down never costs the user their words.
 
+**Only in its own languages.** A post-processor's model declares the languages
+it takes, as a transcription model does: its `supported_languages` when it is
+`multilingual`, its `primary_language` otherwise (see
+[backend.toml](../../backend/config.md#models)). When the transcript's language
+is known — a per-request `language`, the model's own setting, or the global
+one — and the post-processor does not list it, the transcript is delivered as
+transcribed, without a pass through the post-processor. Languages are compared
+on the primary subtag, so one listing `es` takes `es-MX`. When the language is
+not known — no setting, or `auto` — the post-processor runs as before.
+
 **What it applies to:** every final transcript — the daemon's own recording flow
 and [`POST /stt/transcribe`](./transcribe.md). It deliberately does **not** apply to
 preview text or to [realtime sessions](../../backend/contract.md#consumer-facing-endpoint): both are
