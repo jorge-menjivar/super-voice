@@ -10558,6 +10558,10 @@
           "unsupported_language",
           "invalid_value",
           "not_found",
+          "scope_denied",
+          "rate_limited",
+          "write_method_unavailable",
+          "typing_failed",
           "internal",
           "unknown"
         ]
@@ -11527,9 +11531,10 @@
       },
       "ReasonEnvelope": {
         "type": "object",
-        "description": "The auth-failure envelope: `message` names the failure and `data.reason`\nsays which of its cases occurred.\n\nDistinct from `ErrorEnvelope` because the auth surface predates\n`error_code` and clients read `data.reason` there. Both are documented\nrather than reconciled, since changing either is a breaking wire change.",
+        "description": "The auth-failure envelope: `error_code` names the failure and\n`data.reason` says which of its cases occurred.\n\nDistinct from `ErrorEnvelope` because clients read `data.reason` here. The\nidentifier is in `message` too, where clients older than `error_code`\nlook for it.",
         "required": [
           "status",
+          "error_code",
           "message",
           "data"
         ],
@@ -11537,9 +11542,13 @@
           "data": {
             "$ref": "#/components/schemas/Reason"
           },
-          "message": {
+          "error_code": {
             "type": "string",
             "description": "The failure identifier, e.g. `invalid_session` or `auth_denied`."
+          },
+          "message": {
+            "type": "string",
+            "description": "The same identifier, for clients that switched on it before\n`error_code` existed."
           },
           "status": {
             "type": "string",
@@ -12786,6 +12795,8 @@
           "unsupported_language",
           "invalid_value",
           "not_found",
+          "scope_denied",
+          "rate_limited",
           "internal",
           "unknown"
         ]
