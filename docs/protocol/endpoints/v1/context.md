@@ -275,6 +275,5 @@ same — re-read the list.
 | 400  | `invalid_value`   | The id is not a slug, the name is blank, or the prompt or vocabulary is longer than can be delivered; or `POST /stt/context/active` carried a field other than `id`. The `message` says which. |
 | 401  | `invalid_session` | Token unknown / expired / `exe_changed`.                                  |
 | 403  | `scope_denied`    | Token lacks the `settings` scope.                                         |
-| 404  | `unknown_context` | No context has that id (on `GET /stt/context/{id}`).                          |
-| 404  | `not_found`       | No context has that id (on a write naming one that does not exist).       |
+| 404  | `not_found`       | No context has that id, whether read, written or deleted.                 |
 | 404  | `unknown_backend` | No installed backend has that `source`.                                   |

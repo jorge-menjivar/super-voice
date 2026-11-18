@@ -17,7 +17,7 @@
 //! The per-backend override is not here — it is addressed through the backend
 //! it belongs to, at [`super::backends::context`].
 
-use super::wire::{json_error, json_error_msg, ok};
+use super::wire::{json_error_msg, ok};
 use crate::daemon::http::internal::helpers::dispatch::dispatch_command;
 use crate::daemon::http::state::AppState;
 use crate::daemon::http::wire::{Ack, ErrorEnvelope, ReasonEnvelope};
@@ -158,7 +158,7 @@ guesses.",
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "The context.", body = OneContext),
-        (status = 404, description = "No context has that id (`unknown_context`).", body = ErrorEnvelope),
+        (status = 404, description = "No context has that id (`not_found`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
@@ -175,7 +175,13 @@ async fn read_context(s: &AppState, id: &str) -> Response {
             status: "success",
             context: context.clone(),
         }),
-        None => json_error(StatusCode::NOT_FOUND, "unknown_context"),
+        // `not_found`, as every write naming a missing context answers: one
+        // condition, one code, whichever verb asks.
+        None => json_error_msg(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("No context with id {id}"),
+        ),
     }
 }
 

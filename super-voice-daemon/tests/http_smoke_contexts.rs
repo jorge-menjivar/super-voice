@@ -146,7 +146,10 @@ async fn a_context_round_trips_through_the_api() {
     assert_eq!(s, StatusCode::OK, "DELETE /stt/context/coding: {body}");
     let (s, body) = get(&sock, "/stt/context/coding", &token).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
-    assert_eq!(body["error_code"], "unknown_context", "{body}");
+    assert_eq!(
+        body["error_code"], "not_found",
+        "the code a write naming a missing context gets: {body}"
+    );
 }
 
 /// `/stt/context/active` is a literal sibling of `/stt/context/{id}`. If the router
