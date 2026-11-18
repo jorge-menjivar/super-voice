@@ -182,6 +182,7 @@ nothing-runs-offline = Aucun. Fonctionne hors ligne.
 nothing-to-preview-yet = Aucun aperçu pour le moment
 nothing-to-read = Rien à lire. Enregistrez avec vos propres mots, puis saisissez-les ensuite.
 notifications = Notifications
+open-library = Ouvrir la bibliothèque
 open-login-items = Ouvrir les éléments de connexion
 open-repository = Ouvrir le dépôt
 optional = Facultatif

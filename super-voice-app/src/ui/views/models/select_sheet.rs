@@ -61,12 +61,14 @@ pub fn select_backend_sheet(app: &AppModel) -> Element<'_, Message> {
         );
 
     if eligible.is_empty() {
+        let Some(_) = answered else {
+            return col.push(text::body(crate::fl!("loading-progress"))).into();
+        };
         return col
-            .push(text::body(if answered.is_none() {
-                crate::fl!("loading-progress")
-            } else {
-                crate::fl!("no-installed-backend-provides-a-transcription-model")
-            }))
+            .push(text::body(crate::fl!(
+                "no-installed-backend-provides-a-transcription-model"
+            )))
+            .push(open_library_button(Stage::Transcription))
             .into();
     }
 
@@ -79,6 +81,16 @@ pub fn select_backend_sheet(app: &AppModel) -> Element<'_, Message> {
         ));
     }
     col.into()
+}
+
+/// The button under an empty picker sheet's "Open the Library to install
+/// one", which does that: the Browse tab, filtered to what fills `stage`.
+pub(super) fn open_library_button(stage: Stage) -> Element<'static, Message> {
+    widget::button::suggested(crate::fl!("open-library"))
+        .on_press(Message::Shell(
+            crate::ui::messages::ShellMessage::BrowseFor(stage),
+        ))
+        .into()
 }
 
 /// One backend's row in a stage's picker sheet, the same for every stage: the

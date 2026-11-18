@@ -182,6 +182,7 @@ nothing-runs-offline = Nothing. Runs offline.
 nothing-to-preview-yet = Nothing to preview yet
 nothing-to-read = Nothing to read. Record in your own words, then type them in afterwards.
 notifications = Notifications
+open-library = Open Library
 open-login-items = Open Login Items
 open-repository = Open repository
 optional = Optional

@@ -70,6 +70,9 @@ pub enum ShellMessage {
     ToggleContextPage(ContextPage),
     /// Show one of a feature section's tabs.
     SelectTab(crate::state::Page),
+    /// Open the Library's Browse tab, filtered to the backends that can fill
+    /// `stage`. From a stage's picker sheet when nothing installed can.
+    BrowseFor(crate::state::Stage),
     LaunchUrl(String),
     /// A window's width changed, in logical pixels. Only the main window's is
     /// kept: it decides what the header has room for.

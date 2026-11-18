@@ -447,12 +447,12 @@ pub fn sheet(app: &AppModel, stage: BlockStage) -> Element<'_, Message> {
         .push(text::caption(copy.sheet_caption).class(cosmic::theme::Text::Color(muted)));
 
     if eligible.is_empty() {
+        let Some(_) = answered else {
+            return col.push(text::body(crate::fl!("loading-progress"))).into();
+        };
         return col
-            .push(text::body(if answered.is_none() {
-                crate::fl!("loading-progress")
-            } else {
-                copy.sheet_empty
-            }))
+            .push(text::body(copy.sheet_empty))
+            .push(super::select_sheet::open_library_button(stage.stage()))
             .into();
     }
 
