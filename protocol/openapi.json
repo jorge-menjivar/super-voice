@@ -509,7 +509,7 @@
             }
           },
           "400": {
-            "description": "The value was empty (`invalid_request`), or the value is one the option will not take (`invalid_value`): not among its declared `choices`, longer than 4000 characters, or carrying a control character. An option value is injected as an `x-voice-option-<name>` request header, which can hold neither a line break nor an unbounded number of bytes, so a value that cannot be delivered is refused rather than stored. Use `DELETE` to clear an override.",
+            "description": "The value was empty, or the value is one the option will not take (`invalid_value`): not among its declared `choices`, longer than 4000 characters, or carrying a control character. An option value is injected as an `x-voice-option-<name>` request header, which can hold neither a line break nor an unbounded number of bytes, so a value that cannot be delivered is refused rather than stored. Use `DELETE` to clear an override.",
             "content": {
               "application/json": {
                 "schema": {
@@ -876,7 +876,7 @@
             }
           },
           "400": {
-            "description": "The value was empty (`invalid_request`). Use `DELETE` to clear a secret.",
+            "description": "The value was empty (`invalid_value`). Use `DELETE` to clear a secret.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4157,7 +4157,7 @@
           "contexts"
         ],
         "summary": "Choose the active dictation context (scope: settings)",
-        "description": "Puts a context in force by default, or — with `id` as `null` — leaves none active.\n\nEvery backend that has not been pointed elsewhere follows this, and picks it up on its next request rather than on a reload.",
+        "description": "Puts a context in force by default, or — with `id` as `null` — leaves none active.\n\n`id` is the only field. Any other is a `400 invalid_value` naming it: this path is also where a context with the id `active` would be stored, and a body meant for that must not be read as \"leave none active\".\n\nEvery backend that has not been pointed elsewhere follows this, and picks it up on its next request rather than on a reload.",
         "operationId": "stt_set_active_context",
         "requestBody": {
           "content": {
@@ -4176,6 +4176,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ActiveContext"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A field other than `id` (`invalid_value`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -4341,7 +4351,7 @@
             }
           },
           "404": {
-            "description": "No context has that id (`unknown_context`).",
+            "description": "No context has that id (`not_found`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5625,7 +5635,7 @@
             }
           },
           "404": {
-            "description": "No such stage (`unknown_stage`).",
+            "description": "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5735,7 +5745,7 @@
             }
           },
           "404": {
-            "description": "No such stage (`unknown_stage`).",
+            "description": "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5837,7 +5847,7 @@
             }
           },
           "404": {
-            "description": "No such stage (`unknown_stage`).",
+            "description": "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -6019,7 +6029,7 @@
             }
           },
           "400": {
-            "description": "The body was empty (`invalid_request`), this model does not serve that language (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).",
+            "description": "The body was empty (`invalid_value`), this model does not serve that language (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7596,7 +7606,7 @@
             }
           },
           "400": {
-            "description": "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`), or that backend serves no such model (`invalid_model`).",
+            "description": "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7626,7 +7636,7 @@
             }
           },
           "404": {
-            "description": "No such stage (`unknown_stage`).",
+            "description": "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7706,7 +7716,7 @@
             }
           },
           "400": {
-            "description": "`device` is not one this model's manifest declares, or it runs remotely and has no local device (`invalid_device`); the stage has no backend selected (`invalid_backend`); or that backend serves no such model (`invalid_model`).",
+            "description": "`device` is not one this model's manifest declares, or it runs remotely and has no local device (`invalid_device`); or the stage has no backend selected (`invalid_backend`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7736,7 +7746,7 @@
             }
           },
           "404": {
-            "description": "No such stage (`unknown_stage`).",
+            "description": "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7818,7 +7828,7 @@
             }
           },
           "400": {
-            "description": "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`), or that backend serves no such model (`invalid_model`).",
+            "description": "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -7848,7 +7858,7 @@
             }
           },
           "404": {
-            "description": "No such stage (`unknown_stage`).",
+            "description": "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -8030,7 +8040,7 @@
             }
           },
           "400": {
-            "description": "`language` was empty (`invalid_request`), this model does not serve that tag (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).",
+            "description": "`language` was empty (`invalid_value`), this model does not serve that tag (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -9780,7 +9790,7 @@
       },
       "ActiveWrite": {
         "type": "object",
-        "description": "Which context to put in force.",
+        "description": "Which context to put in force.\n\nNothing but `id`. This route shares its path with the context a client\nwould store under the id `active`, and a body shaped like a context — no\n`id`, so \"leave none active\" — cleared the user's selection and answered\n`200`. Refusing every other field turns that into a `400` naming it.",
         "properties": {
           "id": {
             "type": [
@@ -9789,7 +9799,8 @@
             ],
             "description": "The id to activate, or `null` to leave no context active."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "AudioTheme": {
         "type": "string",
