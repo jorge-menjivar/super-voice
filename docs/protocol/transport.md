@@ -283,7 +283,10 @@ A request refused before any endpoint reads it gets the same shape: a body
 that is not JSON, or not the JSON the endpoint takes (a missing field, a value
 of the wrong type), and a path segment that does not parse are `400
 invalid_value`, and an upload over its endpoint's size limit is `413
-payload_too_large`. The `message` says what did not parse.
+payload_too_large`. The `message` says what did not parse. A path no endpoint
+serves is `404 not_found`, and a method the path does not take is `405
+method_not_allowed`, its `Allow` header listing the methods it does take; the
+`message` names the method and the path.
 
 > **Compatibility.** `error_code` was introduced after `message`. Earlier
 > clients switched on `message`, and the auth identifiers (`invalid_session`,
