@@ -5163,7 +5163,7 @@
             }
           },
           "400": {
-            "description": "No such model (`invalid_model`), or no such backend (`invalid_backend`).",
+            "description": "`model` was missing or empty (`invalid_value`); no installed backend serves `(model, source)` in this stage's role (`invalid_model`); or `source` was omitted and the stage has no backend (`invalid_backend`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -8711,7 +8711,7 @@
           "speak"
         ],
         "summary": "Speak a piece of text (scope: speak)",
-        "description": "Synthesizes `text` with the loaded model and plays it on the daemon's output device.\n\n`202`, not `200`: the call returns once the audio is *queued*, and the device is still playing it out when you read the response. To follow the utterance to its end, subscribe to `speaking_state` and `speech_progress` on `GET /events` with the `playback_events` scope — those outlive any one request, which is what a status widget actually needs.\n\n**One utterance at a time, newest wins.** Speaking while something is already playing interrupts it: that is what \"speak this instead\" means, and it is why this endpoint is not refused while the daemon is busy. Only swapping the model out from under live synthesis is refused, by `POST /pipeline/{stage}/model`.\n\nThe daemon normalizes `text` first — markup that would otherwise be read out literally is stripped, and long text is split on sentence boundaries so playback starts before the whole thing is synthesized. Numbers, dates and currency are passed through untouched, because a wrong number-to-words is worse than none.\n\n**`text` is the whole request.** How an utterance is spoken — which voice, which language, how fast, in what manner — is the user's configuration, read per utterance by the daemon. Set a voice with `POST /pipeline/{stage}/model/{model}/voice` and a language with `POST /settings/language`, both under the `settings` scope. An app that can make the machine talk does not thereby get a say in which voice it talks in.\n\n`voice`, `language`, `speed` and `instructions` used to be accepted here. A request still carrying one is refused with `400 invalid_value` naming it, rather than ignored — a client given a different voice than it asked for has no way to find out.\n\nFor text that is still being generated, use `GET /speak/stream` instead.",
+        "description": "Synthesizes `text` with the loaded model and plays it on the daemon's output device.\n\n`202`, not `200`: the call returns once the audio is *queued*, and the device is still playing it out when you read the response. To follow the utterance to its end, subscribe to `speaking_state` and `speech_progress` on `GET /events` with the `playback_events` scope — those outlive any one request, which is what a status widget actually needs.\n\n**One utterance at a time, newest wins.** Speaking while something is already playing interrupts it: that is what \"speak this instead\" means, and it is why this endpoint is not refused while the daemon is busy. Only swapping the model out from under live synthesis is refused, by `POST /pipeline/{stage}/model`.\n\nThe daemon normalizes `text` first — markup that would otherwise be read out literally is stripped, and long text is split on sentence boundaries so playback starts before the whole thing is synthesized. Numbers, dates and currency are passed through untouched, because a wrong number-to-words is worse than none.\n\n**`text` is the whole request.** How an utterance is spoken — which voice, which language, how fast, in what manner — is the user's configuration, read per utterance by the daemon. Set a voice with `POST /tts/pipeline/{stage}/model/{model}/voice` and a language with `POST /settings/language`, both under the `settings` scope. An app that can make the machine talk does not thereby get a say in which voice it talks in.\n\n`voice`, `language`, `speed` and `instructions` used to be accepted here. A request still carrying one is refused with `400 invalid_value` naming it, rather than ignored — a client given a different voice than it asked for has no way to find out.\n\nFor text that is still being generated, use `GET /speak/stream` instead.",
         "operationId": "tts_speak",
         "requestBody": {
           "description": "`text`, and nothing else. Voice, language, speed and instructions are settings, not request fields.",
@@ -8766,7 +8766,7 @@
             }
           },
           "409": {
-            "description": "No model is loaded (`model_not_loaded`). Load one with `POST /pipeline/1/model` and retry.",
+            "description": "No model is loaded (`model_not_loaded`): load one with `POST /tts/pipeline/1/model` and retry. Or the model speaks only in a voice the user chooses and none is chosen (`voice_required`): set one with `POST /tts/pipeline/{stage}/model/{model}/voice`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8855,7 +8855,7 @@
             }
           },
           "409": {
-            "description": "Nothing selected or copied (`nothing_to_read`), or no model is loaded (`model_not_loaded`).",
+            "description": "Nothing selected or copied (`nothing_to_read`), no model is loaded (`model_not_loaded`), or the model speaks only in a voice the user chooses and none is chosen (`voice_required`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -10612,6 +10612,25 @@
           "model_loaded": {
             "type": "boolean",
             "description": "`false` while the feature's model is still loading, after a failed\nswitch, or when none is selected."
+          },
+          "model_state": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ModelState",
+                "description": "Where `selected_model` stands, as `GET /stt/pipeline/1/model` and\n`GET /tts/pipeline/1/model` report it: `loaded`, `idle` (out of memory,\nand its next use loads it) or `not_loaded`, which is also what it says\nwith nothing selected. Absent from a daemon older than the field."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selected_model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The model selected in the feature's first stage, loaded or not. Absent\nwhen none is selected, and from a daemon older than the field.\n\n`current_model` alone could not tell a model asleep from none at all:\nwith idle unload on, a selected model is out of memory most of the\ntime, and `voice status` said \"(none loaded)\" for it.",
+            "example": "whisper-tiny"
           }
         }
       },
@@ -12747,6 +12766,7 @@
           "model_not_loaded",
           "build_not_installed",
           "nothing_to_read",
+          "voice_required",
           "invalid_model",
           "invalid_backend",
           "cuda_unavailable",
