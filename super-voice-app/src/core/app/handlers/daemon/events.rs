@@ -115,9 +115,11 @@ impl AppModel {
                 model_loaded,
                 model_state,
                 actual_device,
+                preferred_device,
                 ..
             } => {
                 self.handle_daemon_ready(actual_device.as_deref(), model_loaded);
+                self.adopt_transcription_device(model_loaded, preferred_device);
                 if !model_loaded {
                     // An unload this app may not have asked for, such as the
                     // daemon's own of an idle model. The event says nothing is
@@ -433,6 +435,31 @@ impl AppModel {
                 None => None,
             },
         }
+    }
+
+    /// Show `device` as the transcription model's Runs on pick, when a model
+    /// is loaded and the pick is for the model the daemon reports.
+    ///
+    /// The `ready` that ends a load or a device move names the device the
+    /// model was asked to run on. The pick is otherwise the app's own, set
+    /// when this app chose a device, so after another client moved the model
+    /// the row kept its old framework above a caption saying it ran on
+    /// another. A pick staged for some other model is a choice still to be
+    /// loaded, and stays.
+    fn adopt_transcription_device(&mut self, loaded: bool, device: Option<String>) {
+        let Some(device) = device.filter(|_| loaded) else {
+            return;
+        };
+        if self.current_model.is_empty()
+            || self
+                .staged_picks
+                .model(Stage::Transcription, &self.current_source)
+                != Some(self.current_model.as_str())
+        {
+            return;
+        }
+        self.staged_picks
+            .set_device(Stage::Transcription, Some(device));
     }
 
     /// Text to speech's events, on its one stage.
