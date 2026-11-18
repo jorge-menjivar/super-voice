@@ -403,6 +403,14 @@ impl AppModel {
             "contexts" => Some(Task::done(cosmic::Action::App(Message::Contexts(
                 crate::ui::messages::ContextsMessage::Reload,
             )))),
+            // A backend's option was set or cleared, or a secret stored or
+            // removed. The catalog carries each option's value, and reloading
+            // it asks again which secrets are configured: without this, a
+            // Configure sheet opened after another client's change showed the
+            // value from when the app started.
+            "options" | "secrets" => Some(Task::done(cosmic::Action::App(Message::Backend(
+                crate::ui::messages::BackendMessage::BackendsReload,
+            )))),
             // Both self-update settings need something beyond a plain
             // `SettingsChanged` no-op, but *what* they need differs —
             // see `self_update_setting_route`'s doc comment for why

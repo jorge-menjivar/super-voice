@@ -127,3 +127,57 @@ pub fn require_own_state_dir() {
         std::env::temp_dir().display()
     );
 }
+
+/// Open `/v1/events` subscribed to `daemon_status_changed` and read until the
+/// `subscribed` ack, returning the connection (kept alive by the caller) and
+/// the body to read more from.
+pub async fn subscribe_daemon_status(
+    sock: &std::path::Path,
+    token: &str,
+) -> (
+    hyper::client::conn::http1::SendRequest<http_body_util::Empty<hyper::body::Bytes>>,
+    hyper::body::Incoming,
+) {
+    use hyper::client::conn::http1::handshake;
+    let stream = tokio::net::UnixStream::connect(sock)
+        .await
+        .expect("connect");
+    let io = hyper_util::rt::TokioIo::new(stream);
+    let (mut sender, conn) = handshake::<_, http_body_util::Empty<hyper::body::Bytes>>(io)
+        .await
+        .expect("handshake");
+    tokio::spawn(async move {
+        let _ = conn.await;
+    });
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri("http://voice.local/v1/events?topics=daemon_status_changed")
+        .header("host", "voice.local")
+        .header("authorization", format!("Bearer {token}"))
+        .body(http_body_util::Empty::new())
+        .expect("build req");
+    let resp = sender.send_request(req).await.expect("send req");
+    assert_eq!(resp.status(), StatusCode::OK);
+    let mut body = resp.into_body();
+    let ack = read_events_until(&mut body, "event: subscribed").await;
+    assert!(ack.contains("event: subscribed"), "missing ack: {ack:?}");
+    (sender, body)
+}
+
+/// Read SSE frames until `needle` appears or five seconds pass.
+pub async fn read_events_until(body: &mut hyper::body::Incoming, needle: &str) -> String {
+    use http_body_util::BodyExt;
+    let mut text = String::new();
+    let read = async {
+        while let Some(Ok(frame)) = body.frame().await {
+            if let Some(d) = frame.data_ref() {
+                text.push_str(&String::from_utf8_lossy(d));
+                if text.contains(needle) {
+                    break;
+                }
+            }
+        }
+    };
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), read).await;
+    text
+}
