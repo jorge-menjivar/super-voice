@@ -72,6 +72,14 @@ impl AppModel {
                 Task::none()
             }
 
+            ModelsPageMessage::RegistryListStale(resp, err) => {
+                log::warn!("Couldn't refresh the backend catalog: {err}");
+                self.registry.backends = resp.backends;
+                self.registry.generated_at = Some(resp.generated_at);
+                self.registry.last_refresh = Some(crate::state::registry::RefreshOutcome::Stale);
+                Task::none()
+            }
+
             ModelsPageMessage::RegistrySearchChanged(s) => {
                 self.registry.filters.search = s;
                 Task::none()

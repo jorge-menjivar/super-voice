@@ -71,10 +71,10 @@ backend, so a long string blocks for as long as typing takes.
 
 **Errors:**
 
-| HTTP | `message`                  | Meaning                                                                       |
+| HTTP | `error_code`               | Meaning                                                                         |
 |------|----------------------------|---------------------------------------------------------------------------------|
-| 401  | `invalid_session`          | Token unknown / expired / `exe_changed`                                        |
-| 403  | `scope_denied`             | Token lacks the `settings` scope                                              |
-| 409  | `recording_in_progress`    | A daemon-mic recording is active and already owns the keyboard                 |
-| 500  | `write_method_unavailable` | No backend could be built — for `auto`, every method in the chain was unusable |
-| 500  | `typing_failed`            | A backend was built but the keystrokes could not be delivered                  |
+| 401  | `invalid_session`          | Token unknown / expired / `exe_changed`                                         |
+| 403  | `scope_denied`             | Token lacks the `settings` scope                                                |
+| 409  | `recording_in_progress`    | A daemon-mic recording is active and already owns the keyboard                  |
+| 500  | `write_method_unavailable` | No backend could be built — for `auto`, every method in the chain was unusable. The `message` says why |
+| 500  | `typing_failed`            | A backend was built but the keystrokes could not be delivered. The `message` says why |

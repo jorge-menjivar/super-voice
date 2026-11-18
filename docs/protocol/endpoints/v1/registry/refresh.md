@@ -29,6 +29,10 @@ No body.
 
 ## Failure modes
 
+Bodies are shortened to the code, as on
+[`install`](./install.md#failure-modes-synchronous): each also carries it as
+`error_code`, with a `message`.
+
 | Status | Cause |
 |---|---|
 | `503` | Could not reach the registry. Body: `{"error":"registry_unavailable"}`. |

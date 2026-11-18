@@ -552,7 +552,7 @@ declared through its [`[[options]]` and `[[secrets]]`](./config.md#options).
 | Field      | Type   | Required | Notes                                                                  |
 |------------|--------|----------|------------------------------------------------------------------------|
 | `text`     | string | yes      | The transcript to rewrite. Never empty — the daemon skips the call for an empty transcript. |
-| `language` | string | no       | BCP-47 tag the transcript was produced in, so the backend punctuates in the right language. Resolved the same way as on `/v1/transcribe`; omitted when the daemon has none. |
+| `language` | string | no       | BCP-47 tag the transcript was produced in, so the backend punctuates in the right language. Resolved the same way as on `/v1/transcribe`; omitted when the daemon has none. A transcript in a language the model does not declare is never sent: the daemon delivers it as transcribed (see [pipeline.md](../endpoints/v1/pipeline.md#post-processing-behavior)). |
 
 **Response (200):**
 

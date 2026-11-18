@@ -20,7 +20,7 @@
 //! endpoints, where they were first written; they are house style, not
 //! backend-specific.
 
-use super::backends::{json_error, json_error_msg};
+use super::backends::json_error_msg;
 use crate::tts::daemon::http::state::AppState;
 use crate::tts::daemon::http::wire::{ErrorEnvelope, ReasonEnvelope};
 use crate::tts::voices::VoiceError;
@@ -532,7 +532,11 @@ fn error(e: &VoiceError) -> Response {
         VoiceError::Audio(_) => {
             json_error_msg(StatusCode::BAD_REQUEST, "unsupported_audio", &e.to_string())
         }
-        VoiceError::NotFound => json_error(StatusCode::NOT_FOUND, "not_found"),
+        VoiceError::NotFound => json_error_msg(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "The voice library has no voice with that id.",
+        ),
         VoiceError::Io(_) => json_error_msg(
             StatusCode::SERVICE_UNAVAILABLE,
             "voice_library_unavailable",

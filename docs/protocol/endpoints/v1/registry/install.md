@@ -222,6 +222,11 @@ Typed `error` values:
 
 ## Failure modes (synchronous)
 
+The bodies below are shortened to the code. Each also carries
+`"status": "error"`, the same code as `error_code` (the field every error
+has, which new clients switch on; `error` is kept for clients older than it),
+and a `message` saying what went wrong.
+
 | Status | Cause |
 |---|---|
 | `400` | Body has zero or more than one of `source` / `repo_url` / `local_path`. Body: `{"error":"bad_request"}`. For Custom-repo, `repo_url` not a `<host>/<owner>/<repo>` reference: `{"error":"bad_repo_url"}`; no forge adapter serves the host in `repo_url` and no `forge` was sent to pick one: `{"error":"unsupported_forge"}` (an unrecognized `forge` value is rejected earlier as a malformed body). For Import-from-dir, `local_path` not an absolute path: `{"error":"bad_local_path"}`. |

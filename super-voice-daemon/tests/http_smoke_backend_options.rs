@@ -363,7 +363,7 @@ async fn undeclared_option_is_404() {
         "undeclared option must be 404: {body}"
     );
     assert_eq!(
-        body["message"], "unknown_option",
+        body["error_code"], "unknown_option",
         "error code for undeclared option: {body}"
     );
 }
@@ -446,7 +446,7 @@ async fn unknown_backend_is_404() {
         "unknown backend must be 404: {body}"
     );
     assert_eq!(
-        body["message"], "unknown_backend",
+        body["error_code"], "unknown_backend",
         "error code for unknown backend: {body}"
     );
 }
@@ -511,5 +511,37 @@ async fn backend_version_falls_back_to_the_scan_when_the_manifest_is_gone() {
     assert_eq!(
         body["backends"][0]["version"], "1.0.0",
         "the scanned version stands in when the manifest cannot be read: {body}"
+    );
+}
+
+/// Setting an option, and clearing it, tells every subscriber: a settings UI
+/// showing the backend's options would otherwise keep the value it read
+/// first.
+#[tokio::test]
+async fn setting_or_clearing_an_option_announces_it() {
+    let (_guard, sock, token) = start_daemon(&["settings", "daemon_status"]).await;
+    let (_sender, mut body) = common::subscribe_daemon_status(&sock, &token).await;
+    let path = format!("/backend/{FIXTURE_SOURCE_ENC}/option/region");
+
+    let (s, _) = post_req(
+        &sock,
+        &path,
+        &token,
+        serde_json::json!({ "value": "eu-west-1" }),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let text = common::read_events_until(&mut body, "\"setting\":\"options\"").await;
+    assert!(
+        text.contains("\"setting\":\"options\""),
+        "a set must announce `options`: {text:?}"
+    );
+
+    let (s, _) = delete_req(&sock, &path, &token).await;
+    assert_eq!(s, StatusCode::OK);
+    let text = common::read_events_until(&mut body, "\"setting\":\"options\"").await;
+    assert!(
+        text.contains("\"setting\":\"options\""),
+        "a clear must announce `options` too: {text:?}"
     );
 }

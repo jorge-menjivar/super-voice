@@ -305,8 +305,11 @@ fn control_row<'a>(
     })
     .placeholder(crate::fl!("select-model"));
 
+    let note = shown
+        .as_deref()
+        .and_then(|m| super::active::memory_note(backend, m));
     let mut rows: Vec<super::surface::ControlRow<'a>> =
-        vec![(crate::fl!("model"), None, dropdown.into())];
+        vec![(crate::fl!("model"), note, dropdown.into())];
     let mut buttons = Vec::new();
 
     // Device dropdown — keyed on the same model the dropdown above shows, so
@@ -447,12 +450,12 @@ pub fn sheet(app: &AppModel, stage: BlockStage) -> Element<'_, Message> {
         .push(text::caption(copy.sheet_caption).class(cosmic::theme::Text::Color(muted)));
 
     if eligible.is_empty() {
+        let Some(_) = answered else {
+            return col.push(text::body(crate::fl!("loading-progress"))).into();
+        };
         return col
-            .push(text::body(if answered.is_none() {
-                crate::fl!("loading-progress")
-            } else {
-                copy.sheet_empty
-            }))
+            .push(text::body(copy.sheet_empty))
+            .push(super::select_sheet::open_library_button(stage.stage()))
             .into();
     }
 

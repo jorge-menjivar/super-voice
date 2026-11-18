@@ -11,8 +11,8 @@
 //! /backend/{backend_id}`](super::backends::uninstall_backend).
 //!
 //! These endpoints answer failures in their own envelope — see
-//! [`registry_error`] — which is why they name `RegistryError` where the rest of
-//! `/v1` names `ErrorEnvelope`.
+//! [`registry_error_msg`] — which is why they name `RegistryError` where the
+//! rest of `/v1` names `ErrorEnvelope`.
 
 pub(crate) mod install;
 pub(crate) mod list;
@@ -32,11 +32,14 @@ use super_engine_daemon::registry::endpoints::RegistryHost;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+/// The envelope with no `message`. Every error the daemon sends here says what
+/// went wrong now; the contract tests still hold the bare shape to the
+/// documented one.
+#[cfg(test)]
+pub(crate) use super_engine_daemon::registry::endpoints::error as registry_error;
 /// The registry error envelope. See
-/// `super_engine_daemon::registry::endpoints::error`.
-pub(crate) use super_engine_daemon::registry::endpoints::{
-    error as registry_error, error_with_message as registry_error_msg,
-};
+/// `super_engine_daemon::registry::endpoints::error_with_message`.
+pub(crate) use super_engine_daemon::registry::endpoints::error_with_message as registry_error_msg;
 
 /// Registry browse/refresh/install/update routes (settings-scope).
 ///

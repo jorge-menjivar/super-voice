@@ -18,13 +18,12 @@
 //! reader looking up how contexts work needs this endpoint in front of them,
 //! and the tag is what decides which page it renders on.
 
-use super::{decode_source, find_backend};
+use super::{decode_source, find_backend, unknown_backend};
 use crate::daemon::http::state::AppState;
 use crate::daemon::http::v1::contexts::write;
-use crate::daemon::http::v1::wire::{json_error, ok};
+use crate::daemon::http::v1::wire::ok;
 use crate::daemon::http::wire::{ErrorEnvelope, ReasonEnvelope};
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::Response;
 use serde::{Deserialize, Serialize};
 use super_voice_shared::models::contexts::DictationContext;
@@ -103,7 +102,7 @@ async fn get_backend_context(State(s): State<AppState>, Path(source): Path<Strin
 
 async fn read(s: &AppState, source: String) -> Response {
     if find_backend(s, &source).await.is_none() {
-        return json_error(StatusCode::NOT_FOUND, "unknown_backend");
+        return unknown_backend(&source);
     }
     let config = s.daemon.config.read().await;
     let (mode, id) = match config.backend_context_override(&source) {
@@ -156,7 +155,7 @@ async fn set_backend_context(
 ) -> Response {
     let source = decode_source(&source);
     if find_backend(&s, &source).await.is_none() {
-        return json_error(StatusCode::NOT_FOUND, "unknown_backend");
+        return unknown_backend(&source);
     }
     // `null` on the wire is "no context at all", which the daemon stores as the
     // empty string. The two spellings differ because the wire has `DELETE` to
@@ -199,7 +198,7 @@ while the active one changes around it.",
 async fn delete_backend_context(State(s): State<AppState>, Path(source): Path<String>) -> Response {
     let source = decode_source(&source);
     if find_backend(&s, &source).await.is_none() {
-        return json_error(StatusCode::NOT_FOUND, "unknown_backend");
+        return unknown_backend(&source);
     }
     let payload = serde_json::json!({ "source": source, "id": null });
     if let Some(failed) = write(&s, "set_backend_context", payload).await {

@@ -72,7 +72,24 @@ pub(super) fn download_split(app: &AppModel) -> (Element<'_, Message>, Element<'
         cards.push(download_card(app, entry));
     }
 
-    let toolbar = download_toolbar(app, result_count(cards.len()));
+    let count = result_count(cards.len());
+    // A refresh that failed still left a list to show; say it may be old
+    // rather than let the click look like it did nothing.
+    let count = if matches!(
+        app.registry.last_refresh,
+        Some(crate::state::registry::RefreshOutcome::Stale)
+    ) {
+        column![
+            count,
+            text::caption(crate::fl!("catalog-refresh-failed"))
+                .class(cosmic::theme::Text::Color(muted_text_color())),
+        ]
+        .spacing(spacing.space_xxxs)
+        .into()
+    } else {
+        count
+    };
+    let toolbar = download_toolbar(app, count);
 
     let list = if cards.is_empty() {
         text::body(crate::fl!("no-backends-match-your-search-try-clearing")).into()
@@ -228,7 +245,7 @@ pub(super) fn download_empty_state(app: &AppModel) -> Element<'_, Message> {
     use crate::state::registry::RefreshOutcome;
     let msg = match &app.registry.last_refresh {
         Some(RefreshOutcome::Failed(e)) => crate::fl!("registry-unreachable", e = e.as_str()),
-        Some(RefreshOutcome::Ok) => {
+        Some(RefreshOutcome::Ok | RefreshOutcome::Stale) => {
             crate::fl!("no-installable-backends-match-your-filters")
         }
         None => crate::fl!("loading-registry-progress"),

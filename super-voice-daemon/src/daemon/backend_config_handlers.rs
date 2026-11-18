@@ -476,6 +476,10 @@ impl SuperSTTDaemon {
         }
 
         let warning = self.reconfigure_if_source_active(&source).await;
+        // An option is the backend's, not one feature's, so every client
+        // hears of it: a settings UI showing the backend's options would
+        // otherwise go on showing the value it last read.
+        self.publish_shared_setting_changed("options");
 
         let base = if value.is_empty() {
             info!("Cleared backend option {name} for {source}");
@@ -503,6 +507,9 @@ impl SuperSTTDaemon {
             return DaemonResponse::error(&format!("secrets_write_failed: {e}"));
         }
         let reload_warning = self.reload_if_source_active(&source).await;
+        // Whether a secret is configured is all a client sees of it, and
+        // another client's write changes that.
+        self.publish_shared_setting_changed("secrets");
         info!("Set backend secret {name} for {source}");
         DaemonResponse::success().with_message(with_reload_warning(
             format!("Secret {name} stored"),
@@ -525,6 +532,7 @@ impl SuperSTTDaemon {
             return DaemonResponse::error(&format!("secrets_write_failed: {e}"));
         }
         let reload_warning = self.reload_if_source_active(&source).await;
+        self.publish_shared_setting_changed("secrets");
         info!("Cleared backend secret {name} for {source}");
         DaemonResponse::success().with_message(with_reload_warning(
             format!("Secret {name} cleared"),

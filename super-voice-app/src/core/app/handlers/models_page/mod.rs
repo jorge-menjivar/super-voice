@@ -37,9 +37,10 @@ impl AppModel {
             | ModelsPageMessage::InstallFailedToStart { .. }
             | ModelsPageMessage::UpdateBackend(_) => self.handle_models_install_lifecycle(message),
 
-            ModelsPageMessage::UninstallBackend(_) | ModelsPageMessage::UninstallFailed { .. } => {
-                self.handle_models_uninstall(message)
-            }
+            ModelsPageMessage::AskUninstall(_)
+            | ModelsPageMessage::CancelUninstall
+            | ModelsPageMessage::UninstallBackend(_)
+            | ModelsPageMessage::UninstallFailed { .. } => self.handle_models_uninstall(message),
 
             ModelsPageMessage::InstallProgress { .. }
             | ModelsPageMessage::InstallCompleted { .. }
@@ -50,6 +51,7 @@ impl AppModel {
             ModelsPageMessage::RefreshRegistry
             | ModelsPageMessage::RegistryListLoaded(_)
             | ModelsPageMessage::RegistryListFailed(_)
+            | ModelsPageMessage::RegistryListStale(..)
             | ModelsPageMessage::RegistrySearchChanged(_)
             | ModelsPageMessage::RegistryIncludeIncompatible(_)
             | ModelsPageMessage::RegistryOnlineFilter(_)

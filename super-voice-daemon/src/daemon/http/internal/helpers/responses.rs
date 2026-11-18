@@ -14,10 +14,15 @@ pub(crate) use super_engine_daemon::http::responses::{
 /// `/v1/stt/transcribe` handler. Clients should check `GET /v1/status`
 /// for `busy` and call `/v1/stt/transcribe/stop` instead of
 /// retrying `/v1/stt/transcribe`.
+///
+/// `message` keeps the bare identifier, as the auth errors do, for clients
+/// that switched on it before `error_code` existed; `error_code` is what the
+/// contract says every error carries.
 pub(crate) fn recording_in_progress_response() -> Response {
     let body = serde_json::json!({
-        "status":  "error",
-        "message": "recording_in_progress",
+        "status":     "error",
+        "error_code": "recording_in_progress",
+        "message":    "recording_in_progress",
     });
     (
         StatusCode::CONFLICT,

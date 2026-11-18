@@ -14,6 +14,7 @@ mod stage_section;
 mod status;
 mod surface;
 mod tabs;
+mod uninstall_dialog;
 mod voice;
 
 use active::active_backend_card;
@@ -41,6 +42,7 @@ pub use build_dialog::build_dialog;
 pub use configure::configure_sheet;
 pub(crate) use fmt::accel_name;
 pub use select_sheet::select_backend_sheet;
+pub use uninstall_dialog::uninstall_dialog;
 
 /// Re-exported so the Updates page's header badge (`ui/views/updates.rs`) can
 /// give its tooltip the same small corner radius as the GPU/status pills'

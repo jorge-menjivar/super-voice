@@ -376,9 +376,11 @@ impl cosmic::Application for AppModel {
         self.context_drawer_impl()
     }
 
-    /// The question asked before downloading another build of a backend.
+    /// The question asked before downloading another build of a backend, or
+    /// before uninstalling one.
     fn dialog(&self) -> Option<Element<'_, Self::Message>> {
         crate::ui::views::models::build_dialog(self)
+            .or_else(|| crate::ui::views::models::uninstall_dialog(self))
     }
 
     /// Describes the interface based on the current state of the application model.

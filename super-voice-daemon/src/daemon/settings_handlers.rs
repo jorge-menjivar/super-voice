@@ -171,8 +171,8 @@ impl SuperSTTDaemon {
                 Err(e) => {
                     warn!("Write-method test could not build a simulator: {e}");
                     return DaemonResponse::error_with_code(
-                        ErrorCode::Internal,
-                        "write_method_unavailable",
+                        ErrorCode::WriteMethodUnavailable,
+                        &format!("Couldn't set up typing with the {method} write method: {e}"),
                     );
                 }
             },
@@ -196,7 +196,10 @@ impl SuperSTTDaemon {
             }
             Err(e) => {
                 warn!("Write-method test failed to type via {resolved}: {e}");
-                DaemonResponse::error_with_code(ErrorCode::Internal, "typing_failed")
+                DaemonResponse::error_with_code(
+                    ErrorCode::TypingFailed,
+                    &format!("Typing via {} failed: {e}", resolved.pretty_name()),
+                )
             }
         }
     }

@@ -82,6 +82,10 @@ shows failures in the same panel.
 
 ## Failure modes
 
+Bodies are shortened to the code, as on
+[`install`](./install.md#failure-modes-synchronous): each also carries it as
+`error_code`, with a `message`.
+
 | Status | Cause |
 |---|---|
 | `400` | Body has zero or more than one of `source` / `repo_url` / `local_path`. Body: `{"error":"bad_request"}`. For Custom-repo, `repo_url` not a `<host>/<owner>/<repo>` reference: `{"error":"bad_repo_url"}`; no forge adapter serves its host and no `forge` was sent: `{"error":"unsupported_forge"}`. For Import-from-dir, `local_path` not an absolute path: `{"error":"bad_local_path"}`. |

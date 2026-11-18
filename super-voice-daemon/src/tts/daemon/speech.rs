@@ -26,7 +26,7 @@
 //! and ducking can be added without changing the endpoint's shape.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use super_voice_shared::tts::models::protocol::DaemonStatusEvent;
 
@@ -185,6 +185,11 @@ pub enum SpeakError {
     /// [`voice_still_to_choose`](crate::tts::daemon::types::SuperTTSDaemon::voice_still_to_choose).
     #[error("voice_required: {0} speaks only in a voice the user chooses, and none is chosen")]
     VoiceRequired(String),
+    /// A request that arrived after this one started speaking first, or a stop
+    /// came after it, while this one still waited — for the model to load,
+    /// usually. Newest wins by arrival, not by who got through the wait first.
+    #[error("superseded: a newer request to speak, or a stop, came while this one waited")]
+    Superseded,
 }
 
 /// What the sink hands the pump.
@@ -283,15 +288,6 @@ impl SynthesisSink for PlaybackSink {
 /// session is checking.
 type CurrentSlot = Arc<Mutex<Option<(String, Arc<AtomicBool>)>>>;
 
-/// Whether taking the utterance slot should tell subscribers speech stopped.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Announce {
-    /// A user or client stopped the speech: the device really did fall silent.
-    Stopped,
-    /// Another utterance is taking over, and will announce itself.
-    Nothing,
-}
-
 /// Owns the output device and the current utterance.
 pub struct SpeechEngine {
     /// `None` until the first utterance opens the device.
@@ -306,6 +302,12 @@ pub struct SpeechEngine {
     /// Reference clips for cloned voices, resolved when a `voice:<uuid>` id
     /// reaches the speak path. `None` in tests that never clone.
     voices: Option<Arc<crate::tts::voices::VoiceLibrary>>,
+    /// The last ticket [`arrival`](Self::arrival) handed out.
+    arrivals: AtomicU64,
+    /// The newest ticket that started speaking, or that a stop overruled.
+    /// Written only under the [`current`](Self::current) lock, so a check
+    /// against it and the slot claim it guards are one step.
+    newest_started: AtomicU64,
 }
 
 impl std::fmt::Debug for SpeechEngine {
@@ -447,6 +449,8 @@ impl SpeechEngine {
             test_format: None,
             events: None,
             voices: None,
+            arrivals: AtomicU64::new(0),
+            newest_started: AtomicU64::new(0),
         }
     }
 
@@ -462,6 +466,8 @@ impl SpeechEngine {
             test_format: Some(format),
             events: None,
             voices: None,
+            arrivals: AtomicU64::new(0),
+            newest_started: AtomicU64::new(0),
         }
     }
 
@@ -541,24 +547,6 @@ impl SpeechEngine {
     /// stop in. The slot is held for the whole of it, so cancelling then both
     /// flushes the ring and reports what it silenced.
     pub async fn cancel(&self) -> Option<String> {
-        self.stop_current(Announce::Stopped).await
-    }
-
-    /// Clear the way for a new utterance: same cancellation, no stop event.
-    ///
-    /// The device does not fall silent when one utterance replaces another, so
-    /// `speaking_state` must not say it did. Publishing a stop for the old id
-    /// here would put a `false` immediately before the new utterance's `true`,
-    /// which a subscriber has no way to read as anything but a gap — the
-    /// applet would drop a live visualizer back to idle for a frame on every
-    /// back-to-back utterance. See `docs/protocol/endpoints/v1/events.md`.
-    async fn supersede(&self) -> Option<String> {
-        self.stop_current(Announce::Nothing).await
-    }
-
-    /// Take the current utterance out of the slot, flag it cancelled, and flush
-    /// the ring. Returns the id it took, if any.
-    async fn stop_current(&self, announce: Announce) -> Option<String> {
         let taken = self.current.lock().take();
         if let Some((_, flag)) = taken.as_ref() {
             flag.store(true, Ordering::Relaxed);
@@ -569,9 +557,7 @@ impl SpeechEngine {
         let id = taken.map(|(id, _)| id);
         if let Some(id) = &id {
             debug!("cancelled in-flight utterance {id}");
-            if announce == Announce::Stopped
-                && let Some(bus) = &self.events
-            {
+            if let Some(bus) = &self.events {
                 bus.publish_speaking_state(false, Some(id.clone()));
             }
         }
@@ -641,6 +627,86 @@ impl SpeechEngine {
         model: &SharedLoadedModel,
         options: SpeakOptions<'_>,
     ) -> Result<SpeakSession, SpeakError> {
+        self.begin_with(self.arrival(), model, options).await
+    }
+
+    /// Take a place in line for the utterance slot.
+    ///
+    /// Taken when a request arrives, before anything it waits on. Two requests
+    /// that find the model asleep both wait for one load, and which of them the
+    /// scheduler wakes first is chance; ordering them by this ticket instead
+    /// is what makes "newest wins" mean the newest the user asked for.
+    pub fn arrival(&self) -> u64 {
+        self.arrivals.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Overrule every request that has arrived so far and not yet started.
+    ///
+    /// A stop is the newest request: something asked for before it and still
+    /// waiting for the model must not start speaking once the wait ends.
+    pub fn overrule_waiting(&self) {
+        // Its own ticket, newer than every one handed out before it, so the
+        // request holding the last of those is overruled too; the next one to
+        // arrive is newer still and speaks.
+        let stop = self.arrival();
+        let _slot = self.current.lock();
+        self.newest_started.fetch_max(stop, Ordering::SeqCst);
+    }
+
+    /// Claim the utterance slot for `ticket`: a new utterance supersedes the
+    /// old, unless a newer one got there first.
+    ///
+    /// # Errors
+    /// [`SpeakError::Superseded`] when a request that arrived after `ticket`
+    /// has already started, or a stop came after it.
+    async fn claim(&self, ticket: u64) -> Result<(String, Arc<AtomicBool>), SpeakError> {
+        // A new utterance supersedes the old, unless a newer one got there
+        // first. The check and the claim are one step under the slot lock: two
+        // requests released by the same model load reach this point in any
+        // order, and the one that arrived later must win either way.
+        let id = format!("utt_{}", uuid::Uuid::new_v4());
+        let flag = Arc::new(AtomicBool::new(false));
+        let displaced = {
+            let mut slot = self.current.lock();
+            if self.newest_started.load(Ordering::SeqCst) > ticket {
+                debug!("dropped a request to speak that a newer one overtook");
+                return Err(SpeakError::Superseded);
+            }
+            self.newest_started.store(ticket, Ordering::SeqCst);
+            slot.replace((id.clone(), Arc::clone(&flag)))
+        };
+        // Flushing after the claim rather than before it: the ring is still
+        // empty of this utterance, and whatever claimed the slot before us is
+        // flagged and flushed whichever order the two ran in.
+        //
+        // No stop event for the one displaced. The device does not fall silent
+        // when one utterance replaces another, so `speaking_state` must not say
+        // it did: a `false` right before the new utterance's `true` reads as a
+        // gap, and the applet would drop a live visualizer back to idle for a
+        // frame on every back-to-back utterance. See
+        // `docs/protocol/endpoints/v1/events.md`.
+        if let Some((old, old_flag)) = displaced {
+            old_flag.store(true, Ordering::Relaxed);
+            debug!("cancelled in-flight utterance {old}");
+        }
+        if let Some(p) = self.playback.lock().await.as_ref() {
+            p.cancel();
+        }
+        Ok((id, flag))
+    }
+
+    /// [`begin`](Self::begin) for a request that took its
+    /// [`arrival`](Self::arrival) ticket earlier.
+    ///
+    /// # Errors
+    /// See [`SpeakError`]. [`SpeakError::Superseded`] when a request that
+    /// arrived after `ticket` has already started, or a stop came after it.
+    pub async fn begin_with(
+        &self,
+        ticket: u64,
+        model: &SharedLoadedModel,
+        options: SpeakOptions<'_>,
+    ) -> Result<SpeakSession, SpeakError> {
         let policy = {
             let guard = model.read().await;
             let loaded = guard.as_ref().ok_or(SpeakError::NotLoaded)?;
@@ -658,14 +724,7 @@ impl SpeechEngine {
             ChunkPolicy::for_model(loaded.definition.product.max_input_chars)
         };
 
-        // A new utterance supersedes the old. Cancelling before claiming the
-        // slot means the ring is already flushed when the first chunk of the
-        // new utterance lands, so the two never overlap.
-        self.supersede().await;
-
-        let id = format!("utt_{}", uuid::Uuid::new_v4());
-        let flag = Arc::new(AtomicBool::new(false));
-        *self.current.lock() = Some((id.clone(), Arc::clone(&flag)));
+        let (id, flag) = self.claim(ticket).await?;
 
         let playback = self.playback().await?;
         let (tx, mut rx) = mpsc::unbounded_channel::<PcmMsg>();
@@ -790,6 +849,23 @@ impl SpeechEngine {
         voice: Option<&str>,
         language: Option<&str>,
     ) -> Result<Utterance, SpeakError> {
+        self.speak_with(self.arrival(), model, text, voice, language)
+            .await
+    }
+
+    /// [`speak`](Self::speak) for a request that took its
+    /// [`arrival`](Self::arrival) ticket earlier.
+    ///
+    /// # Errors
+    /// See [`SpeakError`].
+    pub async fn speak_with(
+        &self,
+        ticket: u64,
+        model: &SharedLoadedModel,
+        text: &str,
+        voice: Option<&str>,
+        language: Option<&str>,
+    ) -> Result<Utterance, SpeakError> {
         check_text(text)?;
         // Checked before claiming the utterance slot, so a request that cannot
         // be served never interrupts what is already playing.
@@ -798,7 +874,7 @@ impl SpeechEngine {
         }
 
         let options = SpeakOptions { voice, language };
-        let mut session = self.begin(model, options).await?;
+        let mut session = self.begin_with(ticket, model, options).await?;
         session.push(text).await?;
         session.end().await
     }
@@ -1489,6 +1565,9 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         use crate::tts::output::notice::Failure;
         use super_voice_shared::tts::models::protocol::{DaemonResponse, ErrorCode};
 
+        // In line from the moment it arrives, before the load below.
+        let ticket = self.speech.arrival();
+
         // The request is `text`; how it is spoken comes from the user's
         // settings, the same way the streaming path gets it — see
         // [`stored_defaults`](Self::stored_defaults), which both go through.
@@ -1527,11 +1606,23 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         // request that cannot be served never interrupts what is playing.
         let result = self
             .speech
-            .speak(&self.model, &text, voice.as_deref(), language.as_deref())
+            .speak_with(
+                ticket,
+                &self.model,
+                &text,
+                voice.as_deref(),
+                language.as_deref(),
+            )
             .await;
 
         match result {
             Ok(utterance) => DaemonResponse::success().with_utterance_id(utterance.id),
+            // Accepted, then replaced before it started: the same answer an
+            // utterance replaced while speaking gets, since its caller can do
+            // nothing different about either.
+            Err(SpeakError::Superseded) => {
+                DaemonResponse::success().with_utterance_id(format!("utt_{}", uuid::Uuid::new_v4()))
+            }
             Err(e) => self.refuse_speech(e).await,
         }
     }
@@ -1551,7 +1642,10 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         // input-validation errors do not, because whoever sent bad text is by
         // definition looking at the response.
         if let Some(failure) = match &err {
-            SpeakError::EmptyText | SpeakError::TextTooLong | SpeakError::UnknownVoice(_) => None,
+            SpeakError::EmptyText
+            | SpeakError::TextTooLong
+            | SpeakError::UnknownVoice(_)
+            | SpeakError::Superseded => None,
             SpeakError::NotLoaded => Some(Failure::no_model_loaded()),
             SpeakError::Device(detail) => Some(Failure::could_not_open_output(detail)),
             SpeakError::Synthesis(detail) => {
@@ -1601,6 +1695,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
     /// # Errors
     /// See [`SpeakError`].
     pub(crate) async fn begin_speech(&self) -> Result<SpeakSession, SpeakError> {
+        let ticket = self.speech.arrival();
         // Before the load, for the reason `handle_speak` gives.
         if let Some(model) = self.voice_still_to_choose().await {
             return Err(SpeakError::VoiceRequired(model));
@@ -1612,7 +1707,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
             voice: voice.as_deref(),
             language: language.as_deref(),
         };
-        self.speech.begin(&self.model, options).await
+        self.speech.begin_with(ticket, &self.model, options).await
     }
 
     /// How the loaded model is configured to speak: its voice and its language.
@@ -1694,6 +1789,8 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         &self,
     ) -> super_voice_shared::tts::models::protocol::DaemonResponse {
         use super_voice_shared::tts::models::protocol::DaemonResponse;
+        // What is still waiting to start was asked for before the stop.
+        self.speech.overrule_waiting();
         match self.speech.cancel().await {
             Some(id) => DaemonResponse::success().with_utterance_id(id),
             None => DaemonResponse::success(),

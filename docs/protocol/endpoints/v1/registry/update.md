@@ -32,6 +32,10 @@ Progress events follow the same shape as `/registry/backend/install`.
 
 ## Failure modes
 
+Bodies are shortened to the code, as on
+[`install`](./install.md#failure-modes-synchronous): each also carries it as
+`error_code`, with a `message`.
+
 | Status | Cause |
 |---|---|
 | `404` | Source not installed, or not in the registry. |

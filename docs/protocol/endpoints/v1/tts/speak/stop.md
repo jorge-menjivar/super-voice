@@ -7,10 +7,13 @@ a client cancelling on a keypress should not have to win a race to get a clean
 result, and should never have to distinguish "I stopped it" from "it had already
 finished" to avoid showing the user an error.
 
-Unlike closing a connection, this works regardless of who started the utterance.
-[`POST /tts/speak`](../speak.md) returns as soon as the audio is queued, so by the
-time a user reaches for a stop button there is no connection left to close —
-which is the whole reason this endpoint exists.
+This works regardless of who started the utterance, and closing a connection
+does not: [`POST /tts/speak`](../speak.md) keeps speaking after its client hangs
+up, so a stop button needs this endpoint.
+
+A stop also drops every request that arrived before it and has not started
+speaking yet — one still waiting for the model to load, say. It does not start
+once the wait ends.
 
 ## Auth
 

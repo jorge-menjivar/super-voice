@@ -6,8 +6,10 @@ device.
 The request is `text` and nothing else; see [the removed
 fields](#the-removed-fields) if you are porting a client that sent more.
 
-The request returns as soon as the utterance is **queued**, not when it finishes
-playing — the daemon keeps speaking after the connection closes. To follow an
+The request answers once the whole text is synthesized and **queued**, not when
+it finishes playing. A client that disconnects before the answer does not stop
+the utterance: the daemon keeps speaking either way, and
+[`/tts/speak/stop`](./speak/stop.md) is what ends it early. To follow an
 utterance to its end, subscribe to
 [`speaking_state` and `speech_progress`](../events.md) with the
 [`playback_events`](../../../scopes/playback_events.md) scope; those outlive any
@@ -18,6 +20,13 @@ playing interrupts it — that is what "speak this instead" means. Taking the
 model away does the same: unloading it, switching it, reloading it, moving it
 to another device or changing its backend stops whatever it was saying rather
 than waiting for it (see [`/tts/pipeline/{stage}/model`](./pipeline/model.md)).
+
+Newest means the request that *arrived* last, not the one that got through
+first. Two requests that find the model unloaded both wait for the same load,
+and are ordered by when they arrived once it ends: the older one, overtaken
+before it started, answers `202` with an `utterance_id` like any other and is
+never spoken. A [stop](./speak/stop.md) overtakes every request that arrived
+before it in the same way.
 
 When the daemon unloads idle models
 ([`/settings/idle_unload`](../settings/idle_unload.md)), a request that finds the selected model unloaded loads it first

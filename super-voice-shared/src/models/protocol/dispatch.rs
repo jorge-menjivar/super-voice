@@ -137,7 +137,7 @@ fn cmd_record(request: &DaemonRequest) -> Result<Command, String> {
     {
         Some(s) => Some(
             s.parse::<RecordingStopMode>()
-                .map_err(|e| format!("Invalid recording stop mode: {e}"))?,
+                .map_err(|_| not_one_of("stop_mode", s, RecordingStopMode::WIRE_VARIANTS))?,
         ),
         None => None,
     };
@@ -362,7 +362,7 @@ fn cmd_set_recording_stop_mode(request: &DaemonRequest) -> Result<Command, Strin
     // (Tier 1 #26). Matches the `record` command's `stop_mode` override.
     let mode = mode_str
         .parse::<RecordingStopMode>()
-        .map_err(|e| format!("Invalid recording stop mode: {e}"))?;
+        .map_err(|_| not_one_of("mode", mode_str, RecordingStopMode::WIRE_VARIANTS))?;
     Ok(Command::SetRecordingStopMode { mode })
 }
 
@@ -377,8 +377,19 @@ fn cmd_set_read_method(request: &DaemonRequest) -> Result<Command, String> {
     // it was, like every other enum setting.
     let method = method
         .parse::<ReadMethod>()
-        .map_err(|e| format!("Invalid read method: {e}"))?;
+        .map_err(|_| not_one_of("method", method, ReadMethod::WIRE_VARIANTS))?;
     Ok(Command::SetReadMethod { method })
+}
+
+/// The message for a value outside an enum setting's wire forms: the field,
+/// what it takes, and what came. The enum's own parse error names its Rust
+/// type (`unknown RecordingStopMode: manual`), which means nothing to whoever
+/// sent the value and lists nothing they could send instead.
+fn not_one_of(field: &str, value: &str, allowed: &[&str]) -> String {
+    format!(
+        "`{field}` must be one of {}, not `{value}`.",
+        allowed.join(", ")
+    )
 }
 
 fn cmd_set_write_method(request: &DaemonRequest) -> Result<Command, String> {
@@ -390,7 +401,7 @@ fn cmd_set_write_method(request: &DaemonRequest) -> Result<Command, String> {
         .ok_or("Missing method for set_write_method command")?;
     let method = method_str
         .parse::<WriteMethod>()
-        .map_err(|e| format!("Invalid input method: {e}"))?;
+        .map_err(|_| not_one_of("method", method_str, WriteMethod::WIRE_VARIANTS))?;
     Ok(Command::SetWriteMethod { method })
 }
 

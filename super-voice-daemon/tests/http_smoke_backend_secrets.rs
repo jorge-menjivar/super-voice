@@ -216,7 +216,39 @@ async fn undeclared_secret_is_404() {
         "undeclared secret must be 404: {body}"
     );
     assert_eq!(
-        body["message"], "unknown_secret",
+        body["error_code"], "unknown_secret",
         "error code for undeclared secret: {body}"
+    );
+}
+
+/// Storing a secret, and clearing it, tells every subscriber: whether a
+/// secret is configured is what a settings UI shows of it.
+#[tokio::test]
+async fn storing_or_clearing_a_secret_announces_it() {
+    let (_guard, sock, token) = start_daemon(&["secrets", "daemon_status"]).await;
+    let (_sender, mut body) = common::subscribe_daemon_status(&sock, &token).await;
+    let path = format!("/backend/{FIXTURE_SOURCE_ENC}/secret/openai_api_key");
+
+    let (s, _) = common::request(
+        &sock,
+        Method::POST,
+        &path,
+        Some(&token),
+        Some(&serde_json::json!({ "value": "not-a-real-key" })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let text = common::read_events_until(&mut body, "\"setting\":\"secrets\"").await;
+    assert!(
+        text.contains("\"setting\":\"secrets\""),
+        "a store must announce `secrets`: {text:?}"
+    );
+
+    let (s, _) = common::request(&sock, Method::DELETE, &path, Some(&token), None).await;
+    assert_eq!(s, StatusCode::OK);
+    let text = common::read_events_until(&mut body, "\"setting\":\"secrets\"").await;
+    assert!(
+        text.contains("\"setting\":\"secrets\""),
+        "a clear must announce `secrets` too: {text:?}"
     );
 }

@@ -70,6 +70,9 @@ pub enum ShellMessage {
     ToggleContextPage(ContextPage),
     /// Show one of a feature section's tabs.
     SelectTab(crate::state::Page),
+    /// Open the Library's Browse tab, filtered to the backends that can fill
+    /// `stage`. From a stage's picker sheet when nothing installed can.
+    BrowseFor(crate::state::Stage),
     LaunchUrl(String),
     /// A window's width changed, in logical pixels. Only the main window's is
     /// kept: it decides what the header has room for.
@@ -243,7 +246,11 @@ pub enum ModelsPageMessage {
     },
     /// User clicked Update on an Installed-tab card.
     UpdateBackend(String),
-    /// User clicked Uninstall.
+    /// User chose Uninstall in a card's menu: ask before doing it.
+    AskUninstall(String),
+    /// User answered the uninstall question with Cancel.
+    CancelUninstall,
+    /// User confirmed the uninstall.
     UninstallBackend(String),
     /// An uninstall request failed; carries the backend `source` and a
     /// human-readable error to surface on the installed card.
@@ -254,6 +261,9 @@ pub enum ModelsPageMessage {
     RegistryListLoaded(super_voice_shared::registry::RegistryListResponse),
     /// Initial fetch of /registry/backend/list failed.
     RegistryListFailed(String),
+    /// The catalog listed, but the refresh asked for before it failed: the
+    /// list is the copy the daemon saved, and may be out of date.
+    RegistryListStale(super_voice_shared::registry::RegistryListResponse, String),
     /// User typed in the search box.
     RegistrySearchChanged(String),
     /// User toggled "show incompatible".
