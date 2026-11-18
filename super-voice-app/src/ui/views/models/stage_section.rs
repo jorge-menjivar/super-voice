@@ -305,8 +305,11 @@ fn control_row<'a>(
     })
     .placeholder(crate::fl!("select-model"));
 
+    let note = shown
+        .as_deref()
+        .and_then(|m| super::active::memory_note(backend, m));
     let mut rows: Vec<super::surface::ControlRow<'a>> =
-        vec![(crate::fl!("model"), None, dropdown.into())];
+        vec![(crate::fl!("model"), note, dropdown.into())];
     let mut buttons = Vec::new();
 
     // Device dropdown — keyed on the same model the dropdown above shows, so

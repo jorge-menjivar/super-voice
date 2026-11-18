@@ -383,6 +383,7 @@ model-clones-voices = { $model } clone les voix
 model-device-unavailable = { $model } nécessite un périphérique indisponible dans cette installation et ne peut donc pas être chargé.
 model-does-not-clone = { $model } ne clone pas les voix
 model-memory-warning = La mémoire GPU risque d’être insuffisante : environ { $value0 } requis, { $value1 } disponibles.
+model-needs-memory = Nécessite environ { $size } de mémoire.
 models-count = { $model_count } modèles
 post-processors-count = { $count } post-traitements
 provision-model-progress = { $value0 } { $value1 } ({ $value2 }/{ $value3 }) : { $value4 } %

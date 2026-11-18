@@ -383,6 +383,7 @@ model-clones-voices = { $model } clones voices
 model-device-unavailable = { $model } needs a device this install doesn't have, so it can't be loaded here.
 model-does-not-clone = { $model } does not clone
 model-memory-warning = This model may not fit on your GPU — needs ~{ $value0 }, { $value1 } available.
+model-needs-memory = Needs about { $size } of memory.
 models-count = { $model_count } models
 post-processors-count = { $count } post-processors
 provision-model-progress = { $value0 } { $value1 } ({ $value2 }/{ $value3 }): { $value4 }%

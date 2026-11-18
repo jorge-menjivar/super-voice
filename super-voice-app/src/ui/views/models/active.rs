@@ -257,6 +257,23 @@ pub(super) fn loaded_model_summary<'a>(
     super::surface::control_rows(rows, buttons)
 }
 
+/// The line under a staged model's Model row: how much memory it declares it
+/// needs, so the size of what Load is about to download and run is known
+/// before the click. `None` for a model that declares no estimate (an online
+/// one) or that the backend does not list.
+///
+/// The memory estimate, not the download: a manifest names each file's URL
+/// and checksum but not its size, and the estimate is what decides whether
+/// the model runs here at all.
+pub(super) fn memory_note(backend: &BackendInfo, model: &str) -> Option<String> {
+    let bytes = backend
+        .models
+        .iter()
+        .find(|m| m.name == model)?
+        .estimated_vram_bytes;
+    (bytes > 0).then(|| crate::fl!("model-needs-memory", size = super::fmt::fmt_size(bytes)))
+}
+
 /// Pure VRAM-fit check for a staged load: given the staged `device`, the
 /// model's conservative `estimated_vram_bytes`, and the primary GPU's
 /// available bytes, returns `(needed, available)` when a **GPU** load looks
@@ -344,7 +361,7 @@ pub(super) fn staged_model_picker<'a>(
 
     let mut rows: Vec<super::surface::ControlRow<'a>> = vec![(
         crate::fl!("model"),
-        None,
+        staged_model.and_then(|m| memory_note(backend, m)),
         scene::tag(Target::ModelMenu, model_dropdown),
     )];
     let mut buttons = Vec::new();
