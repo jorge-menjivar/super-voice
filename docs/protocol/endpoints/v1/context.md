@@ -77,6 +77,11 @@ truncated downstream. These limits only stop a runaway list from being stored.
 `active` and `list` are reserved because both are paths in this namespace, and a
 router prefers the literal: a context taking either id would be stored fine and
 then be permanently unreachable, every read of it answering with something else.
+A request to store one never reaches the store, so it is refused by the route it
+lands on instead: `POST` or `DELETE /stt/context/list` is `405`, as that path
+only lists, and `POST /stt/context/active` is the request that
+[chooses the active context](#post-sttcontextactive), which refuses any field but
+`id` with `400 invalid_value`.
 
 ## `GET /stt/context/list`
 
@@ -204,6 +209,10 @@ request. `id` and `context` are both `null` when nothing is active.
 |-------|---------------|----------|---------------------------------------------|
 | `id`  | string / null | no       | `null` or absent leaves no context active.  |
 
+`id` is the only field. Any other is `400 invalid_value`, its `message` naming
+the field: this path is also where a context with the id `active` would be
+stored, and a body meant for that must not be read as "leave none active".
+
 **Response (200):** the same shape as `GET /stt/context/active`.
 
 ## `GET /stt/backend/{backend_id}/context`
@@ -263,7 +272,7 @@ same — re-read the list.
 
 | HTTP | `error_code`      | Meaning                                                                 |
 |------|-------------------|--------------------------------------------------------------------------|
-| 400  | `invalid_value`   | The id is not a slug or is reserved, the name is blank, or the prompt or vocabulary is longer than can be delivered. The `message` says which. |
+| 400  | `invalid_value`   | The id is not a slug, the name is blank, or the prompt or vocabulary is longer than can be delivered; or `POST /stt/context/active` carried a field other than `id`. The `message` says which. |
 | 401  | `invalid_session` | Token unknown / expired / `exe_changed`.                                  |
 | 403  | `scope_denied`    | Token lacks the `settings` scope.                                         |
 | 404  | `unknown_context` | No context has that id (on `GET /stt/context/{id}`).                          |

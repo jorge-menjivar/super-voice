@@ -86,7 +86,13 @@ struct ContextWrite {
 }
 
 /// Which context to put in force.
+///
+/// Nothing but `id`. This route shares its path with the context a client
+/// would store under the id `active`, and a body shaped like a context — no
+/// `id`, so "leave none active" — cleared the user's selection and answered
+/// `200`. Refusing every other field turns that into a `400` naming it.
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 struct ActiveWrite {
     /// The id to activate, or `null` to leave no context active.
     #[serde(default)]
@@ -308,12 +314,17 @@ async fn read_active(s: &AppState) -> Response {
     description = "\
 Puts a context in force by default, or — with `id` as `null` — leaves none active.
 
+`id` is the only field. Any other is a `400 invalid_value` naming it: this path is \
+also where a context with the id `active` would be stored, and a body meant for that \
+must not be read as \"leave none active\".
+
 Every backend that has not been pointed elsewhere follows this, and picks it up on its \
 next request rather than on a reload.",
     request_body = ActiveWrite,
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "Chosen; this is the selection now in force.", body = ActiveContext),
+        (status = 400, description = "A field other than `id` (`invalid_value`).", body = ErrorEnvelope),
         (status = 404, description = "No context has that id (`not_found`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
