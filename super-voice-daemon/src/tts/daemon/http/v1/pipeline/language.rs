@@ -196,7 +196,7 @@ string.",
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "Override set; this is the resulting resolution, with `source` now `override`.", body = ModelLanguageState),
-        (status = 400, description = "`language` was empty (`invalid_request`), this model does not serve that tag (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).", body = ErrorEnvelope),
+        (status = 400, description = "`language` was empty (`invalid_value`), this model does not serve that tag (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
         (status = 404, description = "No such stage (`unknown_stage`), or this stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
@@ -214,7 +214,7 @@ async fn set_model_language(
     if body.language.is_empty() {
         return json_error_msg(
             StatusCode::BAD_REQUEST,
-            "invalid_request",
+            "invalid_value",
             "`language` must be a tag the model serves, or `auto`. To remove the override, DELETE this path.",
         );
     }

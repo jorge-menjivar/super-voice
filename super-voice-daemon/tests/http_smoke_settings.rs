@@ -528,4 +528,25 @@ async fn a_request_that_does_not_parse_is_answered_in_the_envelope() {
             "{method} {path}: the message says what did not parse: {json}"
         );
     }
+
+    // The router's own refusals too, which had no body at all.
+    for (method, path, status, code) in [
+        (
+            Method::GET,
+            "/no-such-route",
+            StatusCode::NOT_FOUND,
+            "not_found",
+        ),
+        (
+            Method::DELETE,
+            "/settings/volume",
+            StatusCode::METHOD_NOT_ALLOWED,
+            "method_not_allowed",
+        ),
+    ] {
+        let (got, json) =
+            common::request(&http_socket, method.clone(), path, Some(&token), None).await;
+        assert_eq!(got, status, "{method} {path}: {json}");
+        assert_eq!(json["error_code"], code, "{method} {path}: {json}");
+    }
 }

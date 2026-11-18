@@ -98,10 +98,10 @@ model is loaded, which is how a card shows its device before Load.",
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "The preference, what it resolved to, and what this host can offer it.", body = ModelDevice),
-        (status = 400, description = "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`), or that backend serves no such model (`invalid_model`).", body = ErrorEnvelope),
+        (status = 400, description = "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
-        (status = 404, description = "No such stage (`unknown_stage`).", body = ErrorEnvelope),
+        (status = 404, description = "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
     ),
 )]
@@ -121,6 +121,10 @@ pub(crate) async fn get_model_device(
         Some(serde_json::json!({ "model": model })),
     );
     let resp = dispatch(&s.daemon, req).await;
+    let resp = match super::model_in_path(resp) {
+        Ok(resp) => resp,
+        Err(refused) => return *refused,
+    };
     narrowed(resp, ModelDevice::from_daemon)
 }
 
@@ -167,10 +171,10 @@ no speech. A client that wants to offer only what will work narrows its picker t
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "Recorded, or reloaded; this is the resulting report, and `message` says which of the two happened.", body = ModelDevice),
-        (status = 400, description = "`device` is not one this model's manifest declares, or it runs remotely and has no local device (`invalid_device`); the stage has no backend selected (`invalid_backend`); or that backend serves no such model (`invalid_model`).", body = ErrorEnvelope),
+        (status = 400, description = "`device` is not one this model's manifest declares, or it runs remotely and has no local device (`invalid_device`); or the stage has no backend selected (`invalid_backend`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
-        (status = 404, description = "No such stage (`unknown_stage`).", body = ErrorEnvelope),
+        (status = 404, description = "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
         (status = 500, description = "The reload failed; the model was put back on the device it had and the setting is unchanged.", body = ErrorEnvelope),
     ),
@@ -188,6 +192,10 @@ pub(crate) async fn set_model_device(
         Some(serde_json::json!({ "model": model, "device": body.device })),
     );
     let resp = dispatch(&s.daemon, req).await;
+    let resp = match super::model_in_path(resp) {
+        Ok(resp) => resp,
+        Err(refused) => return *refused,
+    };
     narrowed(resp, ModelDevice::from_daemon)
 }
 
@@ -220,10 +228,10 @@ special-casing a status.",
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "The devices on offer.", body = DeviceList),
-        (status = 400, description = "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`), or that backend serves no such model (`invalid_model`).", body = ErrorEnvelope),
+        (status = 400, description = "The stage has no backend selected, so there is nothing to resolve `model` against (`invalid_backend`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
-        (status = 404, description = "No such stage (`unknown_stage`).", body = ErrorEnvelope),
+        (status = 404, description = "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
     ),
 )]
@@ -239,5 +247,9 @@ pub(crate) async fn list_model_devices(
         Some(serde_json::json!({ "model": model })),
     );
     let resp = dispatch(&s.daemon, req).await;
+    let resp = match super::model_in_path(resp) {
+        Ok(resp) => resp,
+        Err(refused) => return *refused,
+    };
     narrowed(resp, DeviceList::from_daemon)
 }

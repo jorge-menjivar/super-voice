@@ -123,6 +123,26 @@ fn unknown_stage(stage: u32) -> Response {
     )
 }
 
+/// A `{model}` in the path that the stage's backend does not serve, answered
+/// as the missing resource it is: `404 unknown_model`, the daemon's sentence
+/// kept. The command bus answers `400 invalid_model`, which is right for a
+/// model named in a request's body and is what these routes answered too,
+/// while their siblings under the same `{model}` (`language`, `voice`)
+/// answered `404 unknown_model`.
+pub(super) fn model_in_path(
+    resp: super_voice_shared::tts::models::protocol::DaemonResponse,
+) -> Result<super_voice_shared::tts::models::protocol::DaemonResponse, Box<Response>> {
+    use super_voice_shared::tts::models::protocol::ErrorCode;
+    if resp.error_code == Some(ErrorCode::InvalidModel) {
+        return Err(Box::new(json_error_msg(
+            StatusCode::NOT_FOUND,
+            "unknown_model",
+            resp.message.as_deref().unwrap_or("unknown_model"),
+        )));
+    }
+    Ok(resp)
+}
+
 /// `GET /pipeline` — every stage, in order.
 #[utoipa::path(
     get,

@@ -146,7 +146,10 @@ async fn a_context_round_trips_through_the_api() {
     assert_eq!(s, StatusCode::OK, "DELETE /stt/context/coding: {body}");
     let (s, body) = get(&sock, "/stt/context/coding", &token).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
-    assert_eq!(body["error_code"], "unknown_context", "{body}");
+    assert_eq!(
+        body["error_code"], "not_found",
+        "the code a write naming a missing context gets: {body}"
+    );
 }
 
 /// `/stt/context/active` is a literal sibling of `/stt/context/{id}`. If the router
@@ -184,8 +187,9 @@ async fn the_active_selection_is_not_shadowed_by_a_context_id() {
     );
 
     // The literal wins over the parameter, so a body shaped like a context
-    // reaches the setter instead of creating one called `active`. Which is the
-    // whole reason that id is refused.
+    // reaches the setter instead of creating one called `active`. It must be
+    // refused there: read as a setter body it has no `id`, which means "leave
+    // none active", and it cleared the user's selection with a `200`.
     let (s, body) = post_req(
         &sock,
         "/stt/context/active",
@@ -193,11 +197,14 @@ async fn the_active_selection_is_not_shadowed_by_a_context_id() {
         json!({ "name": "Nope" }),
     )
     .await;
-    assert_eq!(s, StatusCode::OK, "{body}");
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error_code"], "invalid_value", "{body}");
     assert!(
-        body["id"].is_null(),
-        "the setter ran, with no `id` in the body, so it cleared the selection: {body}"
+        body["message"].as_str().is_some_and(|m| m.contains("name")),
+        "the refusal names the field: {body}"
     );
+    let (_, body) = get(&sock, "/stt/context/active", &token).await;
+    assert_eq!(body["id"], "coding", "the selection is untouched: {body}");
     let (_, body) = get(&sock, "/stt/context/list", &token).await;
     assert_eq!(
         body["contexts"].as_array().expect("an array").len(),

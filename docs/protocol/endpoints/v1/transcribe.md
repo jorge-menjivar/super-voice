@@ -37,8 +37,8 @@ To stop an in-flight daemon-mic capture, see
   "sample_rate": 16000,
 
   // BCP-47 tag or "auto". When omitted, the daemon supplies the configured
-  // language for the active model (see /v1/language and
-  // /v1/backend/{backend_id}/models/{model}/settings/language); a model that doesn't support the resolved
+  // language for the active model (see /v1/settings/language and
+  // /v1/stt/pipeline/{stage}/model/{model}/language); a model that doesn't support the resolved
   // value falls back to its primary_language.
   "language":    "en",
 

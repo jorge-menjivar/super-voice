@@ -150,7 +150,7 @@ async fn set_model_voice(
     if body.voice.is_empty() {
         return crate::tts::daemon::http::v1::backends::json_error_msg(
             StatusCode::BAD_REQUEST,
-            "invalid_request",
+            "invalid_value",
             "`voice` must be an id the model can resolve. To remove the preference, DELETE this path.",
         );
     }

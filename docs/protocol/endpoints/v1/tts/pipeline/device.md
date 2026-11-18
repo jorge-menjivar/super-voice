@@ -77,7 +77,7 @@ Content-Type: application/json
 |------|-------------------|----------------------------------------------------------------------------|
 | 404  | `unknown_stage`   | No such position in the pipeline                                           |
 | 400  | `invalid_backend` | No backend is selected for this stage, so there is nothing to resolve `model` against |
-| 400  | `invalid_model`   | The selected backend serves no `model`, or `model` does not carry this stage's role |
+| 404  | `unknown_model`   | The selected backend serves no `model`, or `model` does not carry this stage's role. The same answer the model's [language](./language.md) and [voice](./voice.md) routes give. |
 | 401  | `invalid_session` | Token unknown / expired / `exe_changed`                                    |
 | 403  | `scope_denied`    | Token lacks the `settings` scope                                           |
 

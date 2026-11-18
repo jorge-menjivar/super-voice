@@ -20,8 +20,8 @@
 use super::{Stage, unknown_stage};
 use crate::daemon::http::internal::helpers::dispatch::{build_request, dispatch, narrowed};
 use crate::daemon::http::state::AppState;
-use crate::daemon::http::v1::wire::json_error;
 use crate::daemon::http::v1::wire::{FromDaemon, LanguageList, ModelLanguageState};
+use crate::daemon::http::v1::wire::{json_error, json_error_msg};
 use crate::daemon::http::wire::{ErrorEnvelope, ReasonEnvelope};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -72,7 +72,11 @@ async fn resolve_source(s: &AppState, stage: u32, model: &str) -> Result<String,
     };
     match crate::daemon::http::v1::backends::find_backend(s, &source).await {
         Some(b) if b.models.iter().any(|m| m.name == model) => Ok(source),
-        _ => Err(Box::new(json_error(StatusCode::NOT_FOUND, "unknown_model"))),
+        _ => Err(Box::new(json_error_msg(
+            StatusCode::NOT_FOUND,
+            "unknown_model",
+            &format!("The backend filling this stage serves no model named `{model}`."),
+        ))),
     }
 }
 
@@ -142,7 +146,7 @@ Overridden in turn by a `language` field in a single `POST /stt/transcribe` body
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "Override set.", body = ModelLanguageState),
-        (status = 400, description = "The body was empty (`invalid_request`), this model does not serve that language (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).", body = ErrorEnvelope),
+        (status = 400, description = "The body was empty (`invalid_value`), this model does not serve that language (`unsupported_language`), or the stage has no backend selected (`invalid_backend`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
         (status = 404, description = "No such stage (`unknown_stage`), or this stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
@@ -155,7 +159,11 @@ async fn set_model_language(
     axum::Json(body): axum::Json<LanguageBody>,
 ) -> Response {
     if body.language.is_empty() {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
+        return json_error_msg(
+            StatusCode::BAD_REQUEST,
+            "invalid_value",
+            "`language` must be a tag the model serves, or `auto`. To remove the override, DELETE this path.",
+        );
     }
     let source = match resolve_source(&s, stage, &model).await {
         Ok(source) => source,

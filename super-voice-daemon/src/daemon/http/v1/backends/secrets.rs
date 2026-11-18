@@ -169,7 +169,7 @@ that fails is reported in the message, and the stage keeps running the old insta
     security(("session_token" = ["secrets"])),
     responses(
         (status = 200, description = "Stored.", body = SecretConfigured),
-        (status = 400, description = "The value was empty (`invalid_request`). Use `DELETE` to clear a secret.", body = ErrorEnvelope),
+        (status = 400, description = "The value was empty (`invalid_value`). Use `DELETE` to clear a secret.", body = ErrorEnvelope),
         (status = 500, description = "The secrets file could not be written (`secrets_write_failed`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `secrets` scope.", body = ErrorEnvelope),
@@ -184,7 +184,11 @@ async fn set_secret(
 ) -> Response {
     let source = decode_source(&source);
     if body.value.is_empty() {
-        return json_error(StatusCode::BAD_REQUEST, "invalid_request");
+        return json_error_msg(
+            StatusCode::BAD_REQUEST,
+            "invalid_value",
+            "`value` is empty. To clear the secret, DELETE this path.",
+        );
     }
     match declared_secret(&s, &source, &name).await {
         Guard::NoBackend => json_error(StatusCode::NOT_FOUND, "unknown_backend"),

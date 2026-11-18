@@ -202,8 +202,10 @@ impl AppModel {
             // Stage 1's is still ignored: its own Load click already set the
             // card loading, and a load from elsewhere is reported by the
             // `model_switched` / `ready` pair that closes it.
-            DaemonStatusEvent::LoadingModel { .. }
-            | DaemonStatusEvent::ActiveBackendChanged { .. } => None,
+            DaemonStatusEvent::LoadingModel { .. } => None,
+            DaemonStatusEvent::ActiveBackendChanged { source } => {
+                self.adopt_transcription_backend(source)
+            }
             // The daemon completed a periodic self-update check and found a
             // newer release. Re-fetch the status so the header badge and the
             // Updates page pick it up without waiting for the user to open
@@ -265,6 +267,38 @@ impl AppModel {
         })
     }
 
+    /// Take on a stage 1 backend chosen by another client.
+    ///
+    /// The app holds stage 1's selection itself, so its card can move the
+    /// moment the user picks; the daemon's `active_backend_changed` was
+    /// ignored, and a backend another client chose never reached the card.
+    /// It kept showing the old one as not loaded, and its Load failed, the
+    /// device it sets first being looked up in the backend the daemon
+    /// actually had. This app's own choice comes back with the backend it
+    /// already shows, and changes nothing.
+    fn adopt_transcription_backend(
+        &mut self,
+        source: Option<String>,
+    ) -> Option<Task<cosmic::Action<Message>>> {
+        if self.selected_backend(Stage::Transcription) == source {
+            return None;
+        }
+        info!("Stage 1's backend changed elsewhere: {source:?}");
+        self.staged_picks.clear(Stage::Transcription);
+        self.clear_loaded_model();
+        self.transcription_idle = None;
+        // What the app does after choosing a backend itself: record it, and
+        // ask for its devices. The model, if one loads, follows in its own
+        // `model_switched`.
+        Some(Task::done(cosmic::Action::App(Message::Stage(
+            crate::ui::messages::StageMessage::BackendSelected {
+                stage: Stage::Transcription,
+                source,
+                model: None,
+            },
+        ))))
+    }
+
     pub(in crate::core::app) fn handle_daemon_model_switched(
         &mut self,
         model_name: &str,
@@ -290,7 +324,13 @@ impl AppModel {
         // learns the active model only via this broadcast — e.g. the settings app
         // reconnecting after a daemon restart, where the startup load now emits
         // model_switched — would otherwise leave model_language_for unset.
-        self.load_model_language(Stage::Transcription, &source, model)
+        let language = self.load_model_language(Stage::Transcription, &source, model.clone());
+        // A model loaded elsewhere — by another client, or after the backend
+        // changed under the card — is staged the way the daemon's selection is
+        // at startup, which is what asks for the devices its Runs on row
+        // lists. A pick this app already holds is left alone.
+        let staged = self.stage_selection_if_unstaged(Stage::Transcription, &model, &source);
+        Task::batch([language, staged])
     }
 
     /// A setting changed — possibly from another client, or this very client's

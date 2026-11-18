@@ -368,7 +368,8 @@ async fn undeclared_option_is_404() {
     );
 }
 
-/// POST with an empty `value` returns 400 `invalid_request`.
+/// POST with an empty `value` returns 400 `invalid_value`, the code every
+/// other empty or malformed field gets.
 #[tokio::test]
 async fn set_empty_value_is_400() {
     let (_guard, sock, token) = start_daemon(&["settings"]).await;
@@ -381,8 +382,14 @@ async fn set_empty_value_is_400() {
         "empty value must be 400: {body}"
     );
     assert_eq!(
-        body["message"], "invalid_request",
+        body["error_code"], "invalid_value",
         "error code for empty value: {body}"
+    );
+    assert!(
+        body["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("DELETE")),
+        "the message says how to clear the option instead: {body}"
     );
 }
 

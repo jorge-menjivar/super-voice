@@ -91,7 +91,7 @@ independently: neither is derived from the other.
 
 The install directory is named by `backend_id`, falling back to `id` when
 `backend_id` is `null` — see
-[`POST /registry/install`](./install.md#request) for the full rule. A client
+[`POST /registry/backend/install`](./install.md#request) for the full rule. A client
 computing the path must apply that fallback rather than assume either field.
 
 `models[].provider` is always an empty string. It is emitted so clients that

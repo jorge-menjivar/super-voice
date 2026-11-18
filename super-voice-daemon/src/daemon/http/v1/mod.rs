@@ -178,7 +178,8 @@ fn assemble(groups: ScopeGroups) -> OpenApiRouter<AppState> {
 /// handed the feature rather than the whole daemon, so they are bound to their
 /// own state and merged once both are. The origin gate goes on last, over both,
 /// and inside it what axum itself refuses is put in the house envelope
-/// ([`envelope_rejection`](crate::daemon::http::rejection::envelope_rejection)).
+/// ([`envelope_rejection`](crate::daemon::http::rejection::envelope_rejection)),
+/// the router's bodiless `404` and `405` included.
 pub(crate) fn router(state: AppState) -> Router {
     let (router, _spec) = assemble(guarded(scope_groups(), &state)).split_for_parts();
     let tts = crate::tts::daemon::http::v1::router(crate::tts::daemon::http::state::AppState::new(
@@ -189,8 +190,8 @@ pub(crate) fn router(state: AppState) -> Router {
     router
         .with_state(state)
         .merge(tts)
-        .layer(middleware::map_response(
-            crate::daemon::http::rejection::envelope_rejection,
+        .layer(middleware::from_fn(
+            crate::daemon::http::rejection::envelope_rejections,
         ))
         .layer(middleware::from_fn_with_state(auth, require_allowed_origin))
 }

@@ -60,13 +60,24 @@ impl AppModel {
         match message {
             ContextsMessage::Reload => {
                 self.contexts.loading = true;
-                Task::perform(client::list_contexts(), |res| match res {
+                let list = Task::perform(client::list_contexts(), |res| match res {
                     Ok(catalog) => app(ContextsMessage::Loaded {
                         active: catalog.active,
                         contexts: catalog.contexts,
                     }),
                     Err(e) => app(ContextsMessage::LoadFailed(e.to_string())),
-                })
+                });
+                // The open Configure sheet shows what its backend is pointed
+                // at, read when it opened. A reload is what a `contexts`
+                // change from another client asks for, and a backend pinned
+                // or unpinned elsewhere left the sheet saying the opposite
+                // until it was closed and opened again.
+                match self.models_page.configure_backend.clone() {
+                    Some(source) if self.contexts.backend_contexts.contains_key(&source) => {
+                        Task::batch([list, Self::fetch_backend_context(source)])
+                    }
+                    _ => list,
+                }
             }
             ContextsMessage::Loaded { active, contexts } => {
                 self.contexts.replace(contexts, active);

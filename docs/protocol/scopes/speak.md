@@ -82,7 +82,7 @@ sequenceDiagram
     App->>App: persist token in keyring
 
     Note over App,D: 2. Speak
-    App->>D: POST /speak<br/>{ text: "The kettle is boiling." }
+    App->>D: POST /tts/speak<br/>{ text: "The kettle is boiling." }
     D-->>App: 202 { utterance_id: "utt_9f2c" }
 
     Note over App,D: 3. Follow it (optional, needs playback_events)

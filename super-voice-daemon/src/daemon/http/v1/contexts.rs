@@ -17,7 +17,7 @@
 //! The per-backend override is not here — it is addressed through the backend
 //! it belongs to, at [`super::backends::context`].
 
-use super::wire::{json_error, json_error_msg, ok};
+use super::wire::{json_error_msg, ok};
 use crate::daemon::http::internal::helpers::dispatch::dispatch_command;
 use crate::daemon::http::state::AppState;
 use crate::daemon::http::wire::{Ack, ErrorEnvelope, ReasonEnvelope};
@@ -86,7 +86,13 @@ struct ContextWrite {
 }
 
 /// Which context to put in force.
+///
+/// Nothing but `id`. This route shares its path with the context a client
+/// would store under the id `active`, and a body shaped like a context — no
+/// `id`, so "leave none active" — cleared the user's selection and answered
+/// `200`. Refusing every other field turns that into a `400` naming it.
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 struct ActiveWrite {
     /// The id to activate, or `null` to leave no context active.
     #[serde(default)]
@@ -152,7 +158,7 @@ guesses.",
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "The context.", body = OneContext),
-        (status = 404, description = "No context has that id (`unknown_context`).", body = ErrorEnvelope),
+        (status = 404, description = "No context has that id (`not_found`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
@@ -169,7 +175,13 @@ async fn read_context(s: &AppState, id: &str) -> Response {
             status: "success",
             context: context.clone(),
         }),
-        None => json_error(StatusCode::NOT_FOUND, "unknown_context"),
+        // `not_found`, as every write naming a missing context answers: one
+        // condition, one code, whichever verb asks.
+        None => json_error_msg(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("No context with id {id}"),
+        ),
     }
 }
 
@@ -308,12 +320,17 @@ async fn read_active(s: &AppState) -> Response {
     description = "\
 Puts a context in force by default, or — with `id` as `null` — leaves none active.
 
+`id` is the only field. Any other is a `400 invalid_value` naming it: this path is \
+also where a context with the id `active` would be stored, and a body meant for that \
+must not be read as \"leave none active\".
+
 Every backend that has not been pointed elsewhere follows this, and picks it up on its \
 next request rather than on a reload.",
     request_body = ActiveWrite,
     security(("session_token" = ["settings"])),
     responses(
         (status = 200, description = "Chosen; this is the selection now in force.", body = ActiveContext),
+        (status = 400, description = "A field other than `id` (`invalid_value`).", body = ErrorEnvelope),
         (status = 404, description = "No context has that id (`not_found`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
