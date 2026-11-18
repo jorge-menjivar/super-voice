@@ -75,7 +75,7 @@ model, not per stage: two models in the same stage can prefer different devices.
         (status = 200, description = "The preference, and what it resolved to.", body = ModelDevice),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
-        (status = 404, description = "No such stage (`unknown_stage`).", body = ErrorEnvelope),
+        (status = 404, description = "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
     ),
 )]
@@ -91,6 +91,10 @@ pub(crate) async fn get_model_device(
         Some(serde_json::json!({ "model": model })),
     );
     let resp = dispatch(&s.daemon, req).await;
+    let resp = match super::model_in_path(resp) {
+        Ok(resp) => resp,
+        Err(refused) => return *refused,
+    };
     narrowed(resp, ModelDevice::from_daemon)
 }
 
@@ -133,7 +137,7 @@ List what this host can offer with `GET /stt/pipeline/{stage}/model/{model}/devi
         (status = 400, description = "This host cannot offer that device (`invalid_device`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
-        (status = 404, description = "No such stage (`unknown_stage`).", body = ErrorEnvelope),
+        (status = 404, description = "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
         (status = 500, description = "The reload failed; the model was put back on the device it had.", body = ErrorEnvelope),
     ),
@@ -151,6 +155,10 @@ pub(crate) async fn set_model_device(
         Some(serde_json::json!({ "model": model, "device": body.device })),
     );
     let resp = dispatch(&s.daemon, req).await;
+    let resp = match super::model_in_path(resp) {
+        Ok(resp) => resp,
+        Err(refused) => return *refused,
+    };
     narrowed(resp, ModelDevice::from_daemon)
 }
 
@@ -177,7 +185,7 @@ model supports.",
         (status = 200, description = "The devices on offer.", body = DeviceList),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `settings` scope.", body = ErrorEnvelope),
-        (status = 404, description = "No such stage (`unknown_stage`).", body = ErrorEnvelope),
+        (status = 404, description = "No such stage (`unknown_stage`), or the stage's backend serves no such model (`unknown_model`).", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
     ),
 )]
@@ -193,5 +201,9 @@ pub(crate) async fn list_model_devices(
         Some(serde_json::json!({ "model": model })),
     );
     let resp = dispatch(&s.daemon, req).await;
+    let resp = match super::model_in_path(resp) {
+        Ok(resp) => resp,
+        Err(refused) => return *refused,
+    };
     narrowed(resp, DeviceList::from_daemon)
 }

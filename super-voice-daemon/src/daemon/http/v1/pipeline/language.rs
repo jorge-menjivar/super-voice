@@ -20,8 +20,8 @@
 use super::{Stage, unknown_stage};
 use crate::daemon::http::internal::helpers::dispatch::{build_request, dispatch, narrowed};
 use crate::daemon::http::state::AppState;
-use crate::daemon::http::v1::wire::json_error;
 use crate::daemon::http::v1::wire::{FromDaemon, LanguageList, ModelLanguageState};
+use crate::daemon::http::v1::wire::{json_error, json_error_msg};
 use crate::daemon::http::wire::{ErrorEnvelope, ReasonEnvelope};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -72,7 +72,11 @@ async fn resolve_source(s: &AppState, stage: u32, model: &str) -> Result<String,
     };
     match crate::daemon::http::v1::backends::find_backend(s, &source).await {
         Some(b) if b.models.iter().any(|m| m.name == model) => Ok(source),
-        _ => Err(Box::new(json_error(StatusCode::NOT_FOUND, "unknown_model"))),
+        _ => Err(Box::new(json_error_msg(
+            StatusCode::NOT_FOUND,
+            "unknown_model",
+            &format!("The backend filling this stage serves no model named `{model}`."),
+        ))),
     }
 }
 

@@ -256,7 +256,7 @@ async fn per_model_language_unknown_targets_are_404() {
         StatusCode::NOT_FOUND,
         "GET unknown model must be 404: {body}"
     );
-    assert_eq!(body["message"], "unknown_model", "{body}");
+    assert_eq!(body["error_code"], "unknown_model", "{body}");
 
     let (st, body) = post_req(
         &sock,
@@ -270,7 +270,7 @@ async fn per_model_language_unknown_targets_are_404() {
         StatusCode::NOT_FOUND,
         "POST unknown model must be 404: {body}"
     );
-    assert_eq!(body["message"], "unknown_model", "{body}");
+    assert_eq!(body["error_code"], "unknown_model", "{body}");
 
     // A stage that does not exist. There is no `{source}` segment to get wrong
     // any more; the equivalent failure is asking about a position the pipeline

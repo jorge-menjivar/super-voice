@@ -485,10 +485,11 @@ async fn the_device_verb_validates_the_model_and_the_device() {
     assert_eq!(st, StatusCode::BAD_REQUEST, "{body}");
     assert_eq!(body["error_code"], "invalid_device", "{body}");
 
-    // A model this stage's backend does not serve.
+    // A model this stage's backend does not serve: a missing resource, as
+    // on the model's language and voice routes.
     let (st, body) = get(&sock, "/tts/pipeline/1/model/not-a-model/device", &token).await;
-    assert_eq!(st, StatusCode::BAD_REQUEST, "{body}");
-    assert_eq!(body["error_code"], "invalid_model", "{body}");
+    assert_eq!(st, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(body["error_code"], "unknown_model", "{body}");
 
     // And the stage itself still has to exist.
     let (st, body) = get(&sock, "/tts/pipeline/9/model/kokoro-82m/device", &token).await;

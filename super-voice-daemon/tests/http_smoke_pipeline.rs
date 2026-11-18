@@ -941,13 +941,29 @@ async fn the_device_verb_validates_the_model_and_the_device() {
 
     // A post-processor is not a stage-1 model, whichever backend serves it.
     let (status, body) = get(&sock, "/stt/pipeline/1/model/cleanup-1/device", &token).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
-    assert_eq!(body["error_code"], "invalid_model");
+    assert_eq!(status, StatusCode::NOT_FOUND, "body: {body}");
+    assert_eq!(body["error_code"], "unknown_model");
     assert!(
         body["message"]
             .as_str()
             .is_some_and(|m| m.contains("/stt/pipeline/2/model/cleanup-1/device")),
         "and the message points at the stage that runs it: {body}"
+    );
+    // A model no backend serves gets the same answer on the language route,
+    // with a sentence rather than the bare code.
+    let (status, body) = get(
+        &sock,
+        "/stt/pipeline/1/model/no-such-model/language",
+        &token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "body: {body}");
+    assert_eq!(body["error_code"], "unknown_model");
+    assert!(
+        body["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("no-such-model")),
+        "the message names the model: {body}"
     );
 
     // A model the manifest confines to the CPU cannot be sent to the GPU.
@@ -1020,8 +1036,8 @@ async fn device_lists_for_a_model_and_for_a_stage() {
     assert_eq!(status, StatusCode::OK, "body: {body}");
     assert_eq!(body["available_devices"], serde_json::json!([]));
     let (status, body) = get(&sock, "/stt/pipeline/1/model/cleanup-1/device/list", &token).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
-    assert_eq!(body["error_code"], "invalid_model");
+    assert_eq!(status, StatusCode::NOT_FOUND, "body: {body}");
+    assert_eq!(body["error_code"], "unknown_model");
 
     // The stage-1 list is the union: the online model adds nothing, the local
     // one brings the CPU and the GPU frameworks this host has.
