@@ -345,6 +345,7 @@ backend-needs-its-build = { $backend } needs its { $framework } build to run on 
 backend-version-source = Version { $value0 }, { $where_from }
 backends-count = { $shown } backends found
 cancel-typing-countdown = Cancel — typing in { $secs }…
+catalog-refresh-failed = Couldn't reach the catalog, so this is the copy saved on this computer.
 catalog-updated = Catalog updated { $t }
 connection-denied = ⛔ Authorization denied ({ $reason })
 connection-error = ❌ Error: { $err }

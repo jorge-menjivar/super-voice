@@ -238,6 +238,10 @@ impl InstallStatus {
 pub enum RefreshOutcome {
     Ok,
     Failed(String),
+    /// Listed from the daemon's saved copy because the refresh failed. The
+    /// failure itself is logged; the Browse tab says only that the list may
+    /// be out of date.
+    Stale,
 }
 
 impl RegistryState {

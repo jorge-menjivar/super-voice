@@ -71,15 +71,24 @@ pub(in crate::core::app) fn fetch_registry_catalog(refresh: bool) -> Task<cosmic
     };
     Task::perform(
         async move {
-            if refresh {
-                let _ = crate::daemon::registry::refresh().await;
-            }
-            crate::daemon::registry::list(&filters).await
+            // A refresh that fails still lists: the daemon answers from the
+            // copy it saved. What the failure changes is that the list may be
+            // out of date, which the Browse tab then says.
+            let refresh_error = if refresh {
+                crate::daemon::registry::refresh()
+                    .await
+                    .err()
+                    .map(|e| e.to_string())
+            } else {
+                None
+            };
+            (crate::daemon::registry::list(&filters).await, refresh_error)
         },
-        |r| {
-            cosmic::Action::App(Message::ModelsPage(match r {
-                Ok(resp) => ModelsPageMessage::RegistryListLoaded(resp),
-                Err(e) => ModelsPageMessage::RegistryListFailed(e.to_string()),
+        |(r, refresh_error)| {
+            cosmic::Action::App(Message::ModelsPage(match (r, refresh_error) {
+                (Ok(resp), None) => ModelsPageMessage::RegistryListLoaded(resp),
+                (Ok(resp), Some(e)) => ModelsPageMessage::RegistryListStale(resp, e),
+                (Err(e), _) => ModelsPageMessage::RegistryListFailed(e.to_string()),
             }))
         },
     )

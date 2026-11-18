@@ -254,6 +254,9 @@ pub enum ModelsPageMessage {
     RegistryListLoaded(super_voice_shared::registry::RegistryListResponse),
     /// Initial fetch of /registry/backend/list failed.
     RegistryListFailed(String),
+    /// The catalog listed, but the refresh asked for before it failed: the
+    /// list is the copy the daemon saved, and may be out of date.
+    RegistryListStale(super_voice_shared::registry::RegistryListResponse, String),
     /// User typed in the search box.
     RegistrySearchChanged(String),
     /// User toggled "show incompatible".

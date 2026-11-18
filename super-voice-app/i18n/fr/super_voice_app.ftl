@@ -345,6 +345,7 @@ backend-needs-its-build = { $backend } a besoin de sa version { $framework } pou
 backend-version-source = Version { $value0 }, { $where_from }
 backends-count = { $shown } moteurs trouvés
 cancel-typing-countdown = Annuler — saisie dans { $secs } s…
+catalog-refresh-failed = Impossible de joindre le catalogue : voici la copie enregistrée sur cet ordinateur.
 catalog-updated = Catalogue actualisé { $t }
 connection-denied = ⛔ Autorisation refusée ({ $reason })
 connection-error = ❌ Erreur : { $err }

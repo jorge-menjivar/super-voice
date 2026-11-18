@@ -50,6 +50,7 @@ impl AppModel {
             ModelsPageMessage::RefreshRegistry
             | ModelsPageMessage::RegistryListLoaded(_)
             | ModelsPageMessage::RegistryListFailed(_)
+            | ModelsPageMessage::RegistryListStale(..)
             | ModelsPageMessage::RegistrySearchChanged(_)
             | ModelsPageMessage::RegistryIncludeIncompatible(_)
             | ModelsPageMessage::RegistryOnlineFilter(_)
