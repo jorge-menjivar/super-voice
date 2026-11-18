@@ -269,6 +269,12 @@ async fn the_removed_option_fields_are_refused_rather_than_ignored() {
             msg.contains("400"),
             "a field that no longer exists is a malformed request, got: {msg}"
         );
+        // The route it points to has to be one the daemon serves: it named
+        // `/pipeline/{stage}/model/{model}/voice`, without the `/tts`.
+        assert!(
+            msg.contains("POST /tts/pipeline/{stage}/model/{model}/voice"),
+            "the refusal must name where a voice is set, got: {msg}"
+        );
     }
 }
 

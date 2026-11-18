@@ -343,6 +343,18 @@ impl AppModel {
                 Some(crate::core::app::handlers::tasks::load_recording_stop_mode())
             }
             "read_method" => Some(crate::core::app::handlers::tasks::load_read_method()),
+            // A model's voice was set or cleared: the Synthesis card shows it.
+            "voice" => Some(self.reload_model_voices()),
+            // A voice was added, renamed or deleted. The Voices tab lists the
+            // library, and the Synthesis card offers the voices drawn from
+            // it: without this, the card said the model had no voices after
+            // another client added one.
+            "voices" => Some(Task::batch([
+                Task::done(cosmic::Action::App(Message::Voices(
+                    crate::ui::messages::VoicesMessage::Refresh,
+                ))),
+                self.reload_model_voices(),
+            ])),
             // A context was added, edited, deleted, or put in force.
             // One topic covers the whole family because the answer to
             // any of them is the same: re-read the list. The open

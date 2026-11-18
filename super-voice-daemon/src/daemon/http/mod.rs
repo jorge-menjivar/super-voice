@@ -8,6 +8,7 @@ mod internal;
 mod openapi;
 #[cfg(test)]
 mod openapi_contract;
+mod rejection;
 mod server;
 mod state;
 #[cfg(test)]

@@ -104,8 +104,8 @@ fn ping_reports_daemon_alive() {
 }
 
 /// `status` must print each feature's `Model:`, `Device:` and `State:` lines.
-/// With no backend installed the daemon is idle, so each model line reports
-/// `(none loaded)` — but every label is always present.
+/// With no backend installed nothing is selected, so each model line reports
+/// `(none selected)` — but every label is always present.
 #[test]
 fn status_reports_each_features_model_and_device() {
     let daemon = spawn_daemon();
@@ -129,9 +129,14 @@ fn status_reports_each_features_model_and_device() {
         );
     }
     assert_eq!(
-        stdout.matches("State:  idle").count(),
+        stdout.matches("Model:  (none selected)").count(),
         2,
-        "both features of an idle daemon are idle; stdout=`{stdout}`"
+        "neither feature has a model selected; stdout=`{stdout}`"
+    );
+    // Not "idle", which is a model asleep.
+    assert!(
+        stdout.contains("State:  not recording") && stdout.contains("State:  not speaking"),
+        "neither feature is at work; stdout=`{stdout}`"
     );
 }
 

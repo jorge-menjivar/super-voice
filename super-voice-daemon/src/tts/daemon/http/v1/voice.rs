@@ -251,6 +251,9 @@ pub(crate) async fn create_voice(
             // trade one stall for another. Nothing reads the result — the
             // registration either warmed the cache or it did not, and speaking
             // registers properly either way.
+            // Another client showing the library, or a model's choice of
+            // voices drawn from it, reads it again.
+            s.daemon.publish_settings_changed("voices");
             let daemon = Arc::clone(&s.daemon);
             let voice_id = voice.voice_id();
             tokio::spawn(async move {
@@ -348,7 +351,10 @@ pub(crate) async fn rename_voice(
     axum::Json(body): axum::Json<RenameVoice>,
 ) -> Response {
     match s.daemon.voices.rename(&id, &body.label) {
-        Ok(voice) => ok(&one(&voice)),
+        Ok(voice) => {
+            s.daemon.publish_settings_changed("voices");
+            ok(&one(&voice))
+        }
         Err(e) => error(&e),
     }
 }
@@ -390,6 +396,8 @@ pub(crate) async fn delete_voice(State(s): State<AppState>, Path(id): Path<Strin
     if let Err(e) = s.daemon.voices.delete(&id) {
         return error(&e);
     }
+    s.daemon.publish_settings_changed("voices");
+    s.daemon.forget_deleted_voice(&voice.voice_id()).await;
     release_from_loaded_model(&s, &voice.voice_id()).await;
     ok(&VoiceDeletedResponse {
         status: "success".into(),

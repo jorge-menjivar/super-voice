@@ -2023,6 +2023,9 @@ async fn a_stored_voice_survives_until_it_is_cleared() {
     }];
     backend.models[0].product.default_voice = Some("af_bella".to_string());
     *daemon.backends.write().await = vec![backend];
+    let mut rx = daemon
+        .events
+        .subscribe(crate::tts::daemon::events::Topic::DaemonStatusChanged);
 
     let block = |resp: super_voice_shared::tts::models::protocol::DaemonResponse| {
         resp.voice.expect("a voice block")
@@ -2057,6 +2060,18 @@ async fn a_stored_voice_survives_until_it_is_cleared() {
     );
     assert_eq!(cleared["source"], "default");
     assert!(cleared["override"].is_null());
+
+    // Setting and clearing each announce themselves, so another client's
+    // Synthesis card re-reads the voice; reading does not.
+    let mut announced = Vec::new();
+    while let Ok(Ok((_topic, event))) =
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv_json()).await
+    {
+        if event["status"] == "settings_changed" {
+            announced.push(event["setting"].as_str().unwrap_or_default().to_string());
+        }
+    }
+    assert_eq!(announced, ["voice", "voice"]);
 }
 
 /// A model with no `default_voice` and nothing stored reports no voice at all,
@@ -2209,6 +2224,119 @@ async fn an_idle_unload_says_the_model_is_idle() {
     assert_eq!(ready["status"], "ready");
     assert_eq!(ready["model_loaded"], false);
     assert_eq!(ready["model_state"], "idle");
+}
+
+/// A model that speaks only in a voice the user chooses, with none chosen, is
+/// refused before it is loaded: the backend would refuse it anyway, after
+/// seconds of loading, with a `500`. The answer says which model and where a
+/// voice is set; once one is, nothing is refused on that account.
+#[tokio::test]
+async fn speak_without_a_chosen_voice_is_refused_before_loading() {
+    use std::time::Duration;
+    let daemon = test_daemon().await;
+    let source = "github.com/super-tts/qwen";
+    let mut backend = fixture_backend_local("qwen", source, "Qwen TTS", "qwen-base");
+    backend.models[0].product.voice_kinds =
+        vec![super_voice_registry_types::manifest::VoiceKind::Cloned];
+    *daemon.backends.write().await = vec![backend];
+    {
+        let mut config = daemon.config.write().await;
+        config.update_synthesis_model("qwen-base".into(), source.into());
+        config.idle_unload.after_secs = 30;
+    }
+    // A load on demand waits for this one, so a refusal that returns at once
+    // never tried one.
+    let _load = daemon.model.begin_load().await.expect("a turn");
+
+    let response = tokio::time::timeout(
+        Duration::from_secs(1),
+        daemon.handle_speak("Hello.".to_string()),
+    )
+    .await
+    .expect("refused without waiting for a load");
+    assert_eq!(response.error_code, Some(ErrorCode::VoiceRequired));
+    let message = response.message.unwrap_or_default();
+    assert!(
+        message.contains("qwen-base") && message.contains("/tts/pipeline/1/model/qwen-base/voice"),
+        "{message}"
+    );
+    assert_eq!(
+        daemon.voice_still_to_choose().await.as_deref(),
+        Some("qwen-base")
+    );
+
+    daemon.config.write().await.update_model_voice(
+        source.into(),
+        "qwen-base".into(),
+        Some("voice:0f8fad5b-d9cb-469f-a165-70867728950e".into()),
+    );
+    assert_eq!(
+        daemon.voice_still_to_choose().await,
+        None,
+        "a voice is chosen"
+    );
+}
+
+/// Deleting a cloned voice forgets it wherever a model was set to it, and says
+/// so, so the model is back to having no voice chosen rather than naming one
+/// that is gone. Other models' choices are left alone.
+#[tokio::test]
+async fn a_deleted_voice_is_no_models_voice_any_more() {
+    let daemon = test_daemon().await;
+    let gone = "voice:0f8fad5b-d9cb-469f-a165-70867728950e";
+    let kept = "voice:6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+    {
+        let mut config = daemon.config.write().await;
+        config.update_model_voice("github.com/a/qwen".into(), "base".into(), Some(gone.into()));
+        config.update_model_voice(
+            "github.com/b/other".into(),
+            "base".into(),
+            Some(kept.into()),
+        );
+    }
+    let mut rx = daemon
+        .events
+        .subscribe(crate::tts::daemon::events::Topic::DaemonStatusChanged);
+
+    daemon.forget_deleted_voice(gone).await;
+
+    {
+        let config = daemon.config.read().await;
+        assert_eq!(config.model_voice("github.com/a/qwen", "base"), None);
+        assert_eq!(config.model_voice("github.com/b/other", "base"), Some(kept));
+    }
+    let (_topic, event) = rx.recv_json().await.expect("an announcement");
+    assert_eq!(event["status"], "settings_changed");
+    assert_eq!(event["setting"], "voice");
+
+    // A voice no model was set to changes nothing, and says nothing.
+    daemon.forget_deleted_voice(gone).await;
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv_json())
+            .await
+            .is_err()
+    );
+}
+
+/// A model with presets speaks without a chosen voice, in its own default, so
+/// it is never refused on that account.
+#[tokio::test]
+async fn a_model_with_presets_needs_no_chosen_voice() {
+    let daemon = test_daemon().await;
+    let source = "github.com/super-tts/kokoro";
+    *daemon.backends.write().await = vec![fixture_backend_local(
+        "kokoro",
+        source,
+        "Kokoro",
+        "kokoro-82m",
+    )];
+    daemon
+        .config
+        .write()
+        .await
+        .update_synthesis_model("kokoro-82m".into(), source.into());
+
+    assert_eq!(daemon.voice_still_to_choose().await, None);
 }
 
 /// Text that cannot be spoken is refused before a model is loaded for it, so

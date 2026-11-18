@@ -91,8 +91,8 @@ Content-Type: application/json
 | 403  | `scope_denied`    | Token lacks the `settings` scope         |
 
 `after_secs` is required and must be a non-negative integer. A malformed body
-fails JSON parsing before the request reaches the handler and gets a generic
-`400` rejection, not a classified `error_code`.
+(missing, negative or not an integer) is `400 invalid_value`, its `message`
+saying what did not parse; see [error responses](../../../transport.md#error-responses).
 
 ## `GET /settings/idle_unload`
 

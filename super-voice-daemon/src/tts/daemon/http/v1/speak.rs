@@ -32,7 +32,7 @@ use utoipa_axum::routes;
 ///
 /// Each one chose how an utterance was spoken — which voice, which language,
 /// how fast, in what manner. Those are the user's settings: a voice and a
-/// language are set through `/pipeline/{stage}/model/{model}/voice` and
+/// language are set through `/tts/pipeline/{stage}/model/{model}/voice` and
 /// `/settings/language`, and the daemon reads them per utterance. An app that
 /// can make the machine talk does not thereby get a say in which voice it talks
 /// in, so there is nowhere in a speak request to say it.
@@ -62,8 +62,8 @@ fn refuse_removed_fields(body: &Value) -> Option<Response> {
         return None;
     }
     let message = format!(
-        "{} {} no longer accepted on /speak; how an utterance is spoken is \
-         configuration — set a voice with POST /pipeline/{{stage}}/model/{{model}}/voice \
+        "{} {} no longer accepted on /tts/speak; how an utterance is spoken is \
+         configuration — set a voice with POST /tts/pipeline/{{stage}}/model/{{model}}/voice \
          and a language with POST /settings/language",
         named.join(", "),
         if named.len() == 1 { "is" } else { "are" },
@@ -150,7 +150,7 @@ passed through untouched, because a wrong number-to-words is worse than none.
 **`text` is the whole request.** How an utterance is spoken — which voice, which \
 language, how fast, in what manner — is the user's configuration, read per \
 utterance by the daemon. Set a voice with \
-`POST /pipeline/{stage}/model/{model}/voice` and a language with \
+`POST /tts/pipeline/{stage}/model/{model}/voice` and a language with \
 `POST /settings/language`, both under the `settings` scope. An app that can make \
 the machine talk does not thereby get a say in which voice it talks in.
 
@@ -170,7 +170,7 @@ For text that is still being generated, use `GET /speak/stream` instead.",
         (status = 400, description = "`text` missing, empty, or over the cap; a request still carrying the removed `voice`/`language`/`speed`/`instructions` fields; or a malformed body.", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `speak` scope.", body = ErrorEnvelope),
-        (status = 409, description = "No model is loaded (`model_not_loaded`). Load one with `POST /pipeline/1/model` and retry.", body = ErrorEnvelope),
+        (status = 409, description = "No model is loaded (`model_not_loaded`): load one with `POST /tts/pipeline/1/model` and retry. Or the model speaks only in a voice the user chooses and none is chosen (`voice_required`): set one with `POST /tts/pipeline/{stage}/model/{model}/voice`.", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
         (status = 500, description = "The backend failed, or the output device could not be opened. `message` carries the reason.", body = ErrorEnvelope),
     ),
@@ -292,7 +292,7 @@ and calls `POST /speak/stop` instead.",
         (status = 400, description = "More text than one utterance may be (`text_too_long`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `speak` scope.", body = ErrorEnvelope),
-        (status = 409, description = "Nothing selected or copied (`nothing_to_read`), or no model is loaded (`model_not_loaded`).", body = ErrorEnvelope),
+        (status = 409, description = "Nothing selected or copied (`nothing_to_read`), no model is loaded (`model_not_loaded`), or the model speaks only in a voice the user chooses and none is chosen (`voice_required`).", body = ErrorEnvelope),
         (status = 429, description = "Per-client rate limit hit; back off and retry.", body = ErrorEnvelope),
         (status = 500, description = "The text could not be read, the backend failed, or the output device could not be opened. `message` carries the reason.", body = ErrorEnvelope),
     ),

@@ -50,6 +50,17 @@ impl Failure {
         }
     }
 
+    /// The selected model speaks only in a voice the user chooses, and none is
+    /// chosen. Said before the model is loaded for nothing.
+    pub(crate) fn no_voice_chosen(model: &str) -> Self {
+        Self {
+            summary: "No voice chosen",
+            body: format!(
+                "{model} speaks only in a voice you choose. Pick one on its Synthesis card in Super Voice."
+            ),
+        }
+    }
+
     /// The selected model was to be loaded for this utterance, and its load
     /// failed. Not [`Self::no_model_loaded`]: a model is selected, and loading
     /// another would not help.

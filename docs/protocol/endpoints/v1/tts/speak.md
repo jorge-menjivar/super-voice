@@ -128,10 +128,11 @@ one-at-a-time — adding an id later would break every client written against it
 | 401  | `invalid_session`   | Token unknown / expired / `exe_changed` — re-auth and retry.                                |
 | 403  | `scope_denied`      | Token lacks the `speak` scope.                                                              |
 | 409  | `model_not_loaded`  | No model is loaded. Load one via [`POST /tts/pipeline/1/model`](./pipeline/model.md#post-ttspipelinestagemodel) and retry.        |
+| 409  | `voice_required`    | The selected model speaks only in a voice the user chooses — its [`voice_kinds`](../../../backend/config.md#voices) offer no preset and it declares no `default_voice` — and none is chosen. Refused before the model is loaded; succeeds once a voice is set with [`POST /tts/pipeline/{stage}/model/{model}/voice`](./pipeline/voice.md). |
 | 429  | `rate_limited`      | Too many requests; back off.                                                                |
 | 500  | —                   | The backend failed, or the output device could not be opened. `message` carries the reason.  |
 
-A failure the caller did not cause — no model, a dead audio device, a backend
-that refused — also raises a desktop notification, because a `speak` is as
+A failure the caller did not cause — no model, no voice chosen, a dead audio
+device, a backend that refused — also raises a desktop notification, because a `speak` is as
 likely to come from a keyboard shortcut as from an app with a UI to show the
 error in. See [`/settings/notification_method`](../settings/notification_method.md).

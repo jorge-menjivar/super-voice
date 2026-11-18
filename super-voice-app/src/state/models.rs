@@ -254,7 +254,7 @@ pub enum MenuAction {
 
 #[cfg(test)]
 mod section_tests {
-    use super::{Page, Section};
+    use super::Section;
 
     /// Every page is in exactly one section, the one `Section::of` names.
     #[test]

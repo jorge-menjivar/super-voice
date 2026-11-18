@@ -54,7 +54,7 @@ Content-Type: application/json
 
 | HTTP | `message`                    | Meaning                                                       |
 |------|------------------------------|---------------------------------------------------------------|
-| 400  | `invalid_recording_stop_mode`| `mode` wasn't one of the three known values                   |
+| 400  | `error_code: invalid_value` | `mode` wasn't one of the three known values; `message` names it |
 | 401  | `invalid_session`            | Token unknown / expired / `exe_changed`                       |
 | 403  | `scope_denied`               | Token lacks the `settings` scope                              |
 

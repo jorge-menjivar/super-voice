@@ -279,6 +279,12 @@ The HTTP status is derived from `error_code` (e.g. a state-conflict code →
 `409`, a bad-input code → `400`); an error the daemon cannot classify carries
 no `error_code` and surfaces as `500`.
 
+A request refused before any endpoint reads it gets the same shape: a body
+that is not JSON, or not the JSON the endpoint takes (a missing field, a value
+of the wrong type), and a path segment that does not parse are `400
+invalid_value`, and an upload over its endpoint's size limit is `413
+payload_too_large`. The `message` says what did not parse.
+
 > **Compatibility.** `error_code` was introduced after `message`. Earlier
 > clients switched on `message`, and the auth identifiers (`invalid_session`,
 > `scope_denied`) still appear there verbatim for that reason. New clients

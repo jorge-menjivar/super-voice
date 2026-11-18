@@ -58,7 +58,7 @@ Content-Type: application/json
 
 | HTTP | `message`             | Meaning                                       |
 |------|-----------------------|-----------------------------------------------|
-| 400  | `Invalid read method` | `method` wasn't `selection` or `clipboard`    |
+| 400  | `error_code: invalid_value` | `method` wasn't `selection` or `clipboard`; `message` names it |
 | 401  | `invalid_session`     | Token unknown / expired / `exe_changed`       |
 | 403  | `scope_denied`        | Token lacks the `settings` scope              |
 

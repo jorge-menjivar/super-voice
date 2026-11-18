@@ -197,10 +197,13 @@ fn cmd_set_audio_theme(request: &DaemonRequest) -> Result<Command, String> {
 
 fn cmd_set_model(request: &DaemonRequest) -> Result<Command, String> {
     let data = request.data.as_ref();
+    // An empty name is refused here rather than looked up: no backend serves
+    // it, and the caller who sent one most likely meant to stop the stage.
     let model_str = data
         .and_then(|d| d.get("model"))
         .and_then(|v| v.as_str())
-        .ok_or("Model string is empty")?;
+        .filter(|m| !m.is_empty())
+        .ok_or("model is missing or empty; to stop a stage, use DELETE")?;
 
     // `source` is the serving backend's repo id. It is optional: when absent
     // the daemon resolves it against the active backend, and rejects the switch

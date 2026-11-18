@@ -315,13 +315,15 @@ impl AppModel {
     /// list is the daemon's join of the model's own presets with the cloned
     /// library. It was read when a model became selected, staged or loaded, and
     /// at no other time — so a voice recorded here did not appear there until
-    /// the app was restarted, and a deleted one was still offered.
+    /// the app was restarted, and a deleted one was still offered. The
+    /// daemon's `settings_changed` for `voice` and `voices` calls it too, for a
+    /// change another client made.
     ///
     /// Addressed to the pair the card is showing rather than to "the active
     /// model", for the same reason every other write on that card is: a reply
     /// that lands after a model switch must not be applied to the model the
     /// user moved to.
-    fn reload_model_voices(&self) -> Task<cosmic::Action<Message>> {
+    pub(in crate::core::app) fn reload_model_voices(&self) -> Task<cosmic::Action<Message>> {
         let Some((source, model)) = self.voice.target.clone() else {
             return Task::none();
         };

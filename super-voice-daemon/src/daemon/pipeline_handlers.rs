@@ -107,7 +107,7 @@ impl SuperSTTDaemon {
     /// lives in a different config field for each, and everything after that —
     /// resolving the device, deciding whether the selection is the instance
     /// actually loaded — is identical, and was the part that used to differ.
-    async fn stage_model(&self, stage: PipelineStage) -> StageModelReport {
+    pub(crate) async fn stage_model(&self, stage: PipelineStage) -> StageModelReport {
         let (model, source) = {
             let config = self.config.read().await;
             match stage {

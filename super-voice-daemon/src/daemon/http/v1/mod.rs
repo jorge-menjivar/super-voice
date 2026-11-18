@@ -176,7 +176,9 @@ fn assemble(groups: ScopeGroups) -> OpenApiRouter<AppState> {
 ///
 /// Text to speech's routes come in here, under `/v1/tts`: their handlers are
 /// handed the feature rather than the whole daemon, so they are bound to their
-/// own state and merged once both are. The origin gate goes on last, over both.
+/// own state and merged once both are. The origin gate goes on last, over both,
+/// and inside it what axum itself refuses is put in the house envelope
+/// ([`envelope_rejection`](crate::daemon::http::rejection::envelope_rejection)).
 pub(crate) fn router(state: AppState) -> Router {
     let (router, _spec) = assemble(guarded(scope_groups(), &state)).split_for_parts();
     let tts = crate::tts::daemon::http::v1::router(crate::tts::daemon::http::state::AppState::new(
@@ -187,6 +189,9 @@ pub(crate) fn router(state: AppState) -> Router {
     router
         .with_state(state)
         .merge(tts)
+        .layer(middleware::map_response(
+            crate::daemon::http::rejection::envelope_rejection,
+        ))
         .layer(middleware::from_fn_with_state(auth, require_allowed_origin))
 }
 

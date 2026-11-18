@@ -840,6 +840,26 @@ impl DaemonConfig {
         }
     }
 
+    /// Clear `voice` wherever a model is set to speak in it, reporting whether
+    /// any was. For a cloned voice that has been deleted: a model still naming
+    /// it would refuse every utterance, and the voice resolution would keep
+    /// reporting a voice that no longer exists.
+    pub fn forget_model_voice(&mut self, voice: &str) -> bool {
+        let mut forgotten = false;
+        for settings in self
+            .backends
+            .models
+            .values_mut()
+            .flat_map(HashMap::values_mut)
+        {
+            if settings.voice.as_deref() == Some(voice) {
+                settings.voice = None;
+                forgotten = true;
+            }
+        }
+        forgotten
+    }
+
     /// A synthesis model's own default voice, if it has one.
     #[must_use]
     pub fn model_voice(&self, source: &str, model: &str) -> Option<&str> {

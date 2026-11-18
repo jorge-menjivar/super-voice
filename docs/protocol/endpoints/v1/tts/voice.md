@@ -175,6 +175,11 @@ Forget the voice and its recording.
 { "status": "success", "deleted": "voice:2f8a2d0e-…" }
 ```
 
+A model set to speak in the voice
+([`/tts/pipeline/{stage}/model/{model}/voice`](./pipeline/voice.md)) is set to
+it no longer: it is back to its `default_voice`, or to none, and the change is
+announced as `settings_changed` for `voice`.
+
 If the model loaded at the time holds the voice, the daemon also asks the
 backend to release it. That release is best-effort: the registration lives in
 the backend's memory and dies with the instance, so a failure costs a little
@@ -192,6 +197,13 @@ Content-Type: audio/wav
 
 Mono 16-bit PCM at 24 kHz — the canonical form, not the bytes that were
 uploaded.
+
+## Telling other clients
+
+Adding, renaming and deleting a voice each publish `settings_changed` for
+`voices` on [`/events`](../events.md), to subscribers holding the
+`daemon_status` scope. It names no voice and carries no audio: a client showing
+the library, or a model's choice of voices drawn from it, reads it again.
 
 ## Speaking in a cloned voice
 
@@ -218,5 +230,5 @@ not. Deleting a voice mid-session does not stop an utterance already in flight.
 | 400  | `clip_too_long`             | The recording is longer than 120 s.                                          |
 | 403  | `scope_denied`              | The token does not hold `voices`.                                            |
 | 404  | `not_found`                 | No voice with that id.                                                       |
-| 413  | —                           | The upload exceeded 48 MiB and was rejected before it was read.              |
+| 413  | `payload_too_large`         | The upload exceeded 48 MiB and was rejected before it was read.              |
 | 503  | `voice_library_unavailable` | The library could not be read or written.                                    |
