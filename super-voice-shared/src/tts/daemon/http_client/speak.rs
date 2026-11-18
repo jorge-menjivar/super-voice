@@ -55,7 +55,11 @@ pub async fn speak(socket_path: PathBuf, token: &str, text: &str) -> HttpResult<
 /// Returns an error if the daemon HTTP listener isn't reachable or the
 /// response can't be parsed.
 pub async fn speak_read(socket_path: PathBuf, token: &str) -> HttpResult<DaemonResponse> {
-    transport::post_json(
+    // No header timeout, for the reason `speak` gives: the daemon answers once
+    // the text is synthesized, and a long selection can take longer than any
+    // fixed limit. Giving up early would only report a failure for speech
+    // that carries on.
+    transport::post_json_no_timeout(
         socket_path,
         token,
         "/tts/speak/read",

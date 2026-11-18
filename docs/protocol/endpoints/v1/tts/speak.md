@@ -6,8 +6,10 @@ device.
 The request is `text` and nothing else; see [the removed
 fields](#the-removed-fields) if you are porting a client that sent more.
 
-The request returns as soon as the utterance is **queued**, not when it finishes
-playing — the daemon keeps speaking after the connection closes. To follow an
+The request answers once the whole text is synthesized and **queued**, not when
+it finishes playing. A client that disconnects before the answer does not stop
+the utterance: the daemon keeps speaking either way, and
+[`/tts/speak/stop`](./speak/stop.md) is what ends it early. To follow an
 utterance to its end, subscribe to
 [`speaking_state` and `speech_progress`](../events.md) with the
 [`playback_events`](../../../scopes/playback_events.md) scope; those outlive any

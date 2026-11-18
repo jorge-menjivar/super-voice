@@ -210,7 +210,8 @@ pub(crate) async fn speak(
     }
 
     let request = build_request("speak", Some(body));
-    let response = dispatch(&state.daemon, request).await;
+    let daemon = std::sync::Arc::clone(&state.daemon);
+    let response = outlive_the_request(async move { dispatch(&daemon, request).await }).await;
     if response.status != "success" {
         return json_response(&response).into_response();
     }
@@ -299,7 +300,8 @@ and calls `POST /speak/stop` instead.",
 )]
 /// `POST /v1/speak/read` — speak the text the read method names.
 pub(crate) async fn speak_read(State(state): State<AppState>) -> Response {
-    let response = state.daemon.handle_speak_read().await;
+    let daemon = std::sync::Arc::clone(&state.daemon);
+    let response = outlive_the_request(async move { daemon.handle_speak_read().await }).await;
     if response.status != "success" {
         return json_response(&response).into_response();
     }
@@ -308,6 +310,23 @@ pub(crate) async fn speak_read(State(state): State<AppState>) -> Response {
         utterance_id: response.utterance_id.unwrap_or_default(),
     };
     (StatusCode::ACCEPTED, axum::Json(accepted)).into_response()
+}
+
+/// Run a speak on its own task, so a client that hangs up does not stop it.
+///
+/// The answer comes once the whole text is synthesized and queued, which on a
+/// long text or behind a model load can be minutes. Axum drops a handler's
+/// future when its client disconnects, and dropping a speech session cancels
+/// it, so run inline a client that gave up first silenced the daemon mid-text,
+/// against the contract's promise that it keeps speaking. On its own task the
+/// speech runs to the end whoever is still listening; `POST /speak/stop` is how
+/// to end it early.
+async fn outlive_the_request(
+    speak: impl Future<Output = DaemonResponse> + Send + 'static,
+) -> DaemonResponse {
+    tokio::spawn(speak).await.unwrap_or_else(|e| {
+        DaemonResponse::error_with_code(ErrorCode::Internal, &format!("speech task failed: {e}"))
+    })
 }
 
 pub(crate) fn routes() -> OpenApiRouter<AppState> {
