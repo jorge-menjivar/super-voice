@@ -122,6 +122,7 @@ impl SuperSTTDaemon {
         });
 
         let start_time = Instant::now();
+        let take_limit = super::take_limit(stop_mode);
 
         Ok((
             RecordingSession {
@@ -136,13 +137,14 @@ impl SuperSTTDaemon {
                 speech_state,
                 device_sample_rate,
                 start_time,
+                take_limit,
             },
             capture_started,
         ))
     }
 
     /// Phase 2: poll the recorder task and stream live preview transcriptions
-    /// until the recorder finishes or the timeout is reached. Previews start
+    /// until the recorder finishes or the take reaches its limit. Previews start
     /// once the model has loaded; a load that fails ends the take.
     pub(super) async fn run_preview_loop(
         &self,
@@ -180,16 +182,14 @@ impl SuperSTTDaemon {
                 break;
             }
 
-            // Prevent runaway recordings. Breaking out of the preview loop is
-            // not enough: `collect_and_clear_preview` then awaits the recorder
-            // task, which — with silence detection disabled and manual stop
-            // refused (SilenceOnly mode) — would otherwise never finish, leaving
-            // capture unbounded with `busy=true` and a frozen preview. Signal
-            // the recorder's stop channel (same one the manual-stop shortcut
-            // uses) so it ends cleanly and returns the audio captured so far.
-            if session.start_time.elapsed() > std::time::Duration::from_mins(1) {
-                warn!("Recording timeout reached, signalling recorder to stop");
-                self.recording.stop();
+            // Stop a take that has run past its limit. Breaking out of the
+            // preview loop is not enough: `collect_and_clear_preview` then
+            // awaits the recorder task, which — when silence never ends it and
+            // no one stops it — would never finish, leaving capture unbounded
+            // with `busy=true` and a frozen preview. The stop goes through the
+            // recorder's stop channel (the one the manual-stop shortcut uses),
+            // so it ends cleanly and returns the audio captured so far.
+            if self.stop_at_take_limit(session).await {
                 break;
             }
 
@@ -537,6 +537,7 @@ mod tests {
             )),
             device_sample_rate: u32::try_from(rate).expect("a test rate fits"),
             start_time: tokio::time::Instant::now(),
+            take_limit: Duration::from_mins(10),
         }
     }
 

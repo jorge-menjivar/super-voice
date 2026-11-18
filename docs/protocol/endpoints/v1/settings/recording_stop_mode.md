@@ -13,6 +13,11 @@ Read and set the default stop behavior for
 Per-request overrides on `/stt/transcribe` take precedence over the
 default set here.
 
+Whatever the mode, a take also stops at a time limit, as if stopped by hand:
+10 minutes in the modes with a manual stop, 1 minute in `silence_only`, where
+nothing but silence would end it. The take is transcribed as far as it got, and
+the user is told with a notification (unless `notification_method` is `off`).
+
 ## Auth
 
 - **Required scope:** `settings`.

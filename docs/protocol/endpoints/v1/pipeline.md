@@ -218,6 +218,10 @@ position.
 than 30 seconds, the **raw transcript is delivered unchanged** and the failure is
 logged. A cleanup step that is down never costs the user their words.
 
+The same goes for an answer more than twice as long as the transcript, plus 40
+characters. A cleanup never comes out that long: such an answer ran on past the
+end of the transcript, and what it added is not what the user said.
+
 **Only in its own languages.** A post-processor's model declares the languages
 it takes, as a transcription model does: its `supported_languages` when it is
 `multilingual`, its `primary_language` otherwise (see

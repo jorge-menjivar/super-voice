@@ -8,7 +8,8 @@
 //! is exactly what the user does not want.
 //!
 //! **Best-effort.** Every failure mode — nothing selected, nothing loaded, the
-//! processor erroring, the processor hanging — yields the raw transcript. The
+//! processor erroring, the processor hanging, the processor running on past
+//! the transcript — yields the raw transcript. The
 //! user asked to dictate; a cleanup step that is down must not cost them the
 //! words. Failures are logged, and the raw text is what gets typed.
 //!
@@ -32,6 +33,22 @@ use super_engine_daemon::stage::StageExt;
 /// enough that a hung processor does not leave the user staring at nothing
 /// after they finished speaking.
 const POST_PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Characters a cleanup may add beyond doubling the transcript, so a very
+/// short take can still gain its capital and full stop ("ok" → "Okay.").
+const RUN_ON_SLACK: usize = 40;
+
+/// Whether `processed` is longer than any cleanup of `raw` could be.
+///
+/// A cleanup takes filler out, punctuates and capitalizes; it never doubles
+/// the text. An answer that does ran on past the end of the transcript: a
+/// small model handed a take cut off mid-sentence finished the sentence, then
+/// repeated itself ("to allow them to allow them…") until it hit its token
+/// cap. What it added is not what the user said. Every post-processor today
+/// is a cleanup; one that rewrote at length would need this revisited.
+fn runs_on(raw: &str, processed: &str) -> bool {
+    processed.chars().count() > raw.chars().count() * 2 + RUN_ON_SLACK
+}
 
 impl SuperSTTDaemon {
     /// Rewrite a final transcript with the loaded post-processor, falling back
@@ -86,6 +103,15 @@ impl SuperSTTDaemon {
                 // the transcript; keep the words rather than typing a blank.
                 if processed.trim().is_empty() {
                     warn!("Post-processor returned empty text; using the raw transcript");
+                    return raw;
+                }
+                if runs_on(&raw, &processed) {
+                    warn!(
+                        "Post-processor ran on past the transcript ({} characters for {}); \
+                         using the raw transcript. It returned: '{processed}'",
+                        processed.chars().count(),
+                        raw.chars().count()
+                    );
                     return raw;
                 }
                 info!(
@@ -172,11 +198,13 @@ mod tests {
     use crate::stt_models::transcribe::{ModelInfo, ModelInfoData, ModelState, Transcribe};
 
     /// A post-processor fake: either uppercases its input (so a test can see
-    /// that processing happened), fails, or hangs past the timeout.
+    /// that processing happened), fails, answers with nothing, or loops past
+    /// the end of its input.
     enum Behavior {
         Uppercase,
         Fail,
         Empty,
+        Loop,
     }
 
     struct FakeProcessor {
@@ -214,6 +242,7 @@ mod tests {
                 Behavior::Uppercase => Ok(text.to_uppercase()),
                 Behavior::Fail => anyhow::bail!("processor boom"),
                 Behavior::Empty => Ok("   ".to_string()),
+                Behavior::Loop => Ok(format!("{text}{}", " to allow them".repeat(40))),
             }
         }
     }
@@ -279,6 +308,29 @@ mod tests {
         let daemon = daemon_with(Behavior::Empty).await;
         let out = daemon.post_process_final("hello there".into(), None).await;
         assert_eq!(out, "hello there");
+    }
+
+    /// The take that found this: cut off mid-sentence, the processor carried
+    /// the sentence on and looped until its token cap, and the loop was
+    /// typed. A cleanup never doubles a transcript, so the raw text wins.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_answer_that_runs_on_yields_the_raw_transcript() {
+        let daemon = daemon_with(Behavior::Loop).await;
+        let raw = "The second feature similarly is to allow users";
+        let out = daemon.post_process_final(raw.into(), None).await;
+        assert_eq!(out, raw);
+    }
+
+    /// A very short take still gets its cleanup: the slack covers the
+    /// capital and full stop it gains.
+    #[test]
+    fn a_short_take_may_gain_its_punctuation() {
+        assert!(!super::runs_on("ok", "Okay."));
+        assert!(!super::runs_on(
+            "milk eggs bread",
+            "- Milk\n- Eggs\n- Bread"
+        ));
+        assert!(super::runs_on("allow users", &"to allow them ".repeat(10)));
     }
 
     /// The toggle is what the user set; a loaded processor must not run while
