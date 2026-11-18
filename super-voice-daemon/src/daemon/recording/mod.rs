@@ -33,6 +33,21 @@ pub(crate) struct TakeSettings {
 /// `client_id` reported on every daemon-mic lifecycle event.
 const CLIENT_ID: &str = "daemon_recorder";
 
+/// The longest a take records before the daemon stops it.
+///
+/// A ceiling against a take that would otherwise never end: a microphone left
+/// on, or a room never quiet enough for silence detection. A take the user can
+/// stop gets room for real dictation: a minute cut people off mid-sentence. A
+/// take only silence can end keeps the tighter minute, since nothing else
+/// stops it when the silence never comes.
+fn take_limit(stop_mode: RecordingStopMode) -> std::time::Duration {
+    if stop_mode.manual_stop_enabled() {
+        std::time::Duration::from_mins(10)
+    } else {
+        std::time::Duration::from_mins(1)
+    }
+}
+
 /// Outputs from the recorder-spawn phase, consumed by the loop and collect phases.
 struct RecordingSession {
     pub(super) recorder_handle: tokio::task::JoinHandle<Result<Vec<f32>>>,
@@ -62,6 +77,8 @@ struct RecordingSession {
     pub(super) speech_state: Arc<parking_lot::Mutex<crate::audio::state::RecordingState>>,
     pub(super) device_sample_rate: u32,
     pub(super) start_time: Instant,
+    // How long the take may run: see [`take_limit`].
+    pub(super) take_limit: std::time::Duration,
 }
 
 /// The take's audio for the final decode: cut back to its last speech.
@@ -118,17 +135,42 @@ impl SuperSTTDaemon {
     }
 
     /// Tell the user the keyboard could not be set up. See
-    /// [`crate::output::notification::deliver_without_keyboard`] for why this
+    /// [`crate::output::notification::deliver_untyped`] for why this
     /// cannot go through [`Self::surface_failure`].
     pub(crate) async fn surface_keyboard_unavailable(&self, detail: &str) {
         let method = self.config.read().await.notification_method;
         let mut notifier = self.notifier.lock().await;
-        crate::output::notification::deliver_without_keyboard(
+        crate::output::notification::deliver_untyped(
             method,
             &mut notifier,
             &notice::Failure::keyboard_unavailable(detail),
         )
         .await;
+    }
+
+    /// Stop the take once it has run past its [`take_limit`], and tell the
+    /// user. Returns whether it did.
+    ///
+    /// The user may still be talking when this fires, and nothing they say
+    /// from here on is recorded, so they hear of it at once rather than
+    /// finding the end missing from their text. Never typed: the preview may
+    /// be on screen, and a notice typed into it would be erased with it.
+    async fn stop_at_take_limit(&self, session: &RecordingSession) -> bool {
+        if session.start_time.elapsed() <= session.take_limit {
+            return false;
+        }
+        let limit = notice::minutes(session.take_limit);
+        warn!("The recording reached its {limit} limit; stopping it");
+        self.recording.stop();
+        let method = self.config.read().await.notification_method;
+        let mut notifier = self.notifier.lock().await;
+        crate::output::notification::deliver_untyped(
+            method,
+            &mut notifier,
+            &notice::Failure::take_limit_reached(&limit),
+        )
+        .await;
+        true
     }
 
     /// Stop the recording on request: a second press of the hotkey, or
@@ -577,5 +619,31 @@ impl SuperSTTDaemon {
                 transcription_success,
                 error,
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::take_limit;
+    use std::time::Duration;
+    use super_voice_shared::models::recording_stop_mode::RecordingStopMode;
+
+    /// A take the user can stop has room for real dictation; the minute that
+    /// cut people off mid-sentence is left only where nothing but silence
+    /// ends the take.
+    #[test]
+    fn a_take_the_user_can_stop_runs_ten_minutes() {
+        assert_eq!(
+            take_limit(RecordingStopMode::ManualOnly),
+            Duration::from_mins(10)
+        );
+        assert_eq!(
+            take_limit(RecordingStopMode::SilenceAndManual),
+            Duration::from_mins(10)
+        );
+        assert_eq!(
+            take_limit(RecordingStopMode::SilenceOnly),
+            Duration::from_mins(1)
+        );
     }
 }

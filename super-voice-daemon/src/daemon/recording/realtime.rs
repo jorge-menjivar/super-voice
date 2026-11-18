@@ -45,9 +45,6 @@ const STREAM_POLL: Duration = Duration::from_millis(100);
 /// to, and a backend needing something else converts on its own side.
 const TARGET_RATE: u32 = 16000;
 
-/// Same runaway guard the sliding-window loop applies.
-const MAX_TAKE: Duration = Duration::from_mins(1);
-
 impl SuperSTTDaemon {
     /// Capture on while the transcription model loads, until it is in, its
     /// load fails, or capture ends.
@@ -63,10 +60,9 @@ impl SuperSTTDaemon {
     ) {
         while load.finished().is_none() && !session.recorder_handle.is_finished() {
             tokio::time::sleep(STREAM_POLL).await;
-            // Same runaway guard as the stream itself.
-            if session.start_time.elapsed() > MAX_TAKE {
-                warn!("Recording timeout reached, signalling recorder to stop");
-                self.recording.stop();
+            // The take's limit counts from the start of capture, loading
+            // included, the same as the stream's.
+            if self.stop_at_take_limit(session).await {
                 return;
             }
         }
@@ -168,12 +164,10 @@ impl SuperSTTDaemon {
             }
             tokio::time::sleep(STREAM_POLL).await;
 
-            // Same runaway guard as the sliding-window loop: signal the
-            // recorder's stop channel so capture ends and the audio so far is
-            // returned, rather than streaming forever.
-            if session.start_time.elapsed() > MAX_TAKE {
-                warn!("Recording timeout reached, signalling recorder to stop");
-                self.recording.stop();
+            // The same limit as the sliding-window loop: the recorder's stop
+            // channel ends capture and the audio so far is returned, rather
+            // than streaming forever.
+            if self.stop_at_take_limit(session).await {
                 break;
             }
 

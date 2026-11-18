@@ -38,6 +38,11 @@ pub(crate) const TRANSCRIPTION_FAILED: &str = "[Super Voice: transcription faile
 /// held to the same catalogue and invariants as the rest.
 pub(crate) const KEYBOARD_UNAVAILABLE: &str = "[Super Voice: cannot type]";
 
+/// The take ran to its time limit and was stopped. Never actually typed — it
+/// arrives while the take's preview may be on screen — but held to the same
+/// catalogue as the rest.
+pub(crate) const TAKE_LIMIT_REACHED: &str = "[Super Voice: recording stopped at its time limit]";
+
 #[cfg(test)]
 pub(crate) const ALL: &[&str] = &[
     NO_MODEL_LOADED,
@@ -46,6 +51,7 @@ pub(crate) const ALL: &[&str] = &[
     RECORDING_FAILED,
     TRANSCRIPTION_FAILED,
     KEYBOARD_UNAVAILABLE,
+    TAKE_LIMIT_REACHED,
 ];
 
 /// Who authored a failure's detail, which decides how the notification body
@@ -148,6 +154,27 @@ impl Failure {
             body: body(Origin::Daemon, detail, "The keyboard could not be set up."),
         }
     }
+
+    /// The take ran to its time limit, `limit` as [`minutes`] words it, and
+    /// was stopped. The user may have been mid-sentence, so the body says
+    /// that what came after is missing.
+    pub(crate) fn take_limit_reached(limit: &str) -> Self {
+        Self {
+            typed: TAKE_LIMIT_REACHED,
+            summary: "Recording stopped",
+            body: format!(
+                "A recording can be at most {limit} long. Anything said after that was not recorded."
+            ),
+        }
+    }
+}
+
+/// A whole number of minutes in words: "1 minute", "10 minutes".
+pub(crate) fn minutes(duration: std::time::Duration) -> String {
+    match duration.as_secs() / 60 {
+        1 => "1 minute".to_string(),
+        n => format!("{n} minutes"),
+    }
 }
 
 /// Render a reason into a notification body: labelled by origin, or replaced by
@@ -215,7 +242,7 @@ fn escape_markup(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ALL, Failure, MAX_DETAIL, Origin, sanitize};
+    use super::{ALL, Failure, MAX_DETAIL, Origin, minutes, sanitize};
 
     /// Every failure the daemon can raise, for the invariants that must hold
     /// across all of them.
@@ -227,7 +254,21 @@ mod tests {
             Failure::transcription_failed(Origin::Daemon, "d"),
             Failure::transcription_failed(Origin::Backend, "d"),
             Failure::keyboard_unavailable("d"),
+            Failure::take_limit_reached("10 minutes"),
         ]
+    }
+
+    /// The notice names the limit, and says that what came after it is gone:
+    /// the user was likely still talking when it fired.
+    #[test]
+    fn a_take_stopped_at_its_limit_says_what_was_lost() {
+        let f = Failure::take_limit_reached(&minutes(std::time::Duration::from_mins(10)));
+        assert_eq!(f.summary, "Recording stopped");
+        assert_eq!(
+            f.body,
+            "A recording can be at most 10 minutes long. Anything said after that was not recorded."
+        );
+        assert_eq!(minutes(std::time::Duration::from_mins(1)), "1 minute");
     }
 
     /// The remedy is the point of this notice: it names the exact binary to

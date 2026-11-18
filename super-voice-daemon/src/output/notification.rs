@@ -420,16 +420,16 @@ pub(crate) async fn deliver(
     }
 }
 
-/// Route a failure that happened because the keyboard itself could not be set
-/// up.
+/// Route a failure that cannot be typed.
 ///
-/// [`deliver`] cannot carry this one: its typed channel needs the very keyboard
-/// that failed. So every method except `off` sends a notification — `typed`
-/// included, because typing is exactly what cannot happen, and a user who chose
-/// it still needs to learn why nothing appeared. Before this existed the
-/// failure was logged and nothing else, so a recording started from a global
-/// shortcut failed with no sign at all.
-pub(crate) async fn deliver_without_keyboard(
+/// [`deliver`] cannot carry these: its typed channel either needs the very
+/// keyboard that failed, or would type into a take's preview, which is erased
+/// before the transcript is typed. So every method except `off` sends a
+/// notification — `typed` included, and a user who chose it still needs to
+/// learn what happened. Before this existed a keyboard failure was logged and
+/// nothing else, so a recording started from a global shortcut failed with no
+/// sign at all.
+pub(crate) async fn deliver_untyped(
     method: NotificationMethod,
     notifier: &mut Notifier,
     failure: &Failure,
@@ -599,7 +599,7 @@ mod tests {
             NotificationMethod::Typed,
         ] {
             let (mut n, sent) = Notifier::fake(false);
-            deliver_without_keyboard(
+            deliver_untyped(
                 method,
                 &mut n,
                 &Failure::keyboard_unavailable("Add the daemon under Accessibility"),
@@ -619,7 +619,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn a_keyboard_failure_stays_silent_when_surfacing_is_off() {
         let (mut n, sent) = Notifier::fake(false);
-        deliver_without_keyboard(
+        deliver_untyped(
             NotificationMethod::Off,
             &mut n,
             &Failure::keyboard_unavailable("d"),
