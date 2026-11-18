@@ -77,7 +77,7 @@ Content-Type: application/json
 {
   "status": "error",
   "error_code": "invalid_value",
-  "message": "voice is no longer accepted on /speak; how an utterance is spoken is configuration — set a voice with POST /tts/pipeline/{stage}/model/{model}/voice and a language with POST /settings/language"
+  "message": "voice is no longer accepted on /tts/speak; how an utterance is spoken is configuration — set a voice with POST /tts/pipeline/{stage}/model/{model}/voice and a language with POST /settings/language"
 }
 ```
 

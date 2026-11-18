@@ -150,7 +150,10 @@ RIFF….
 
 One voice's metadata, in the same shape as a list entry. `404 not_found` if
 `id` names nothing — including when it is not a uuid at all, so a malformed id
-tells a caller nothing about the filesystem.
+tells a caller nothing about the filesystem. The one exception is `list`, which
+is the [listing's](#get-ttsvoicelist) own path: `GET` lists, and `PATCH` or
+`DELETE` there is `405 method_not_allowed`. No voice can take the id, as the
+daemon mints every one as a uuid.
 
 `{id}` is accepted with or without the `voice:` prefix.
 
