@@ -21,6 +21,13 @@ model away does the same: unloading it, switching it, reloading it, moving it
 to another device or changing its backend stops whatever it was saying rather
 than waiting for it (see [`/tts/pipeline/{stage}/model`](./pipeline/model.md)).
 
+Newest means the request that *arrived* last, not the one that got through
+first. Two requests that find the model unloaded both wait for the same load,
+and are ordered by when they arrived once it ends: the older one, overtaken
+before it started, answers `202` with an `utterance_id` like any other and is
+never spoken. A [stop](./speak/stop.md) overtakes every request that arrived
+before it in the same way.
+
 When the daemon unloads idle models
 ([`/settings/idle_unload`](../settings/idle_unload.md)), a request that finds the selected model unloaded loads it first
 and answers once it has: `409 model_not_loaded` then means no model is selected,

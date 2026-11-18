@@ -673,3 +673,61 @@ async fn a_voice_refused_again_after_the_retry_fails_the_utterance() {
         "tried, and retried once"
     );
 }
+
+/// A shared model holding the recording backend, the way the daemon holds one.
+async fn shared(definition: ModelDefinition) -> crate::tts::daemon::types::SharedLoadedModel {
+    let (loaded, _log) = loaded(definition);
+    let model: crate::tts::daemon::types::SharedLoadedModel = Arc::default();
+    crate::tts::daemon::types::put_model(&model, loaded).await;
+    model
+}
+
+/// Two requests that waited on the same model load are let through in either
+/// order. The one that arrived later wins even when it is let through first:
+/// the earlier one, reaching the slot after it, is dropped rather than
+/// replacing it.
+#[tokio::test]
+async fn the_request_that_arrived_last_wins_whichever_is_let_through_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _library) = engine(dir.path());
+    let model = shared(model(vec![VoiceKind::Preset], &["af_heart"])).await;
+
+    let first = engine.arrival();
+    let second = engine.arrival();
+
+    let newer = engine
+        .speak_with(second, &model, "The newer one.", None, None)
+        .await
+        .expect("the newer request speaks");
+    let older = engine
+        .speak_with(first, &model, "The older one.", None, None)
+        .await;
+
+    assert!(
+        matches!(older, Err(SpeakError::Superseded)),
+        "the older request must not speak after the newer: {older:?}"
+    );
+    assert!(newer.id.starts_with("utt_"));
+}
+
+/// A stop overrules what is still waiting to start: a request asked for
+/// before it does not start speaking once its wait ends.
+#[tokio::test]
+async fn a_stop_overrules_a_request_still_waiting_to_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _library) = engine(dir.path());
+    let model = shared(model(vec![VoiceKind::Preset], &["af_heart"])).await;
+
+    let waiting = engine.arrival();
+    engine.overrule_waiting();
+    let late = engine
+        .speak_with(waiting, &model, "Too late.", None, None)
+        .await;
+    assert!(matches!(late, Err(SpeakError::Superseded)), "{late:?}");
+
+    // Whatever arrives after the stop speaks as usual.
+    engine
+        .speak(&model, "After the stop.", None, None)
+        .await
+        .expect("a request after the stop speaks");
+}
