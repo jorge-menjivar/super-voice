@@ -7107,7 +7107,7 @@ dependencies = [
 
 [[package]]
 name = "super-voice-app"
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 dependencies = [
  "anyhow",
  "block2 0.6.2",
@@ -7155,7 +7155,7 @@ dependencies = [
 
 [[package]]
 name = "super-voice-cli"
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 dependencies = [
  "anyhow",
  "clap",
@@ -7171,7 +7171,7 @@ dependencies = [
 
 [[package]]
 name = "super-voice-consent"
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 dependencies = [
  "libc",
  "libcosmic",
@@ -7181,7 +7181,7 @@ dependencies = [
 
 [[package]]
 name = "super-voice-daemon"
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7249,7 +7249,7 @@ dependencies = [
 
 [[package]]
 name = "super-voice-install"
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 dependencies = [
  "flate2",
  "hex",
@@ -7266,7 +7266,7 @@ dependencies = [
 
 [[package]]
 name = "super-voice-registry-types"
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 dependencies = [
  "jsonschema",
  "schemars",
@@ -7281,7 +7281,7 @@ dependencies = [
 
 [[package]]
 name = "super-voice-shared"
-version = "0.3.0-beta.6"
+version = "0.3.0-beta.7"
 dependencies = [
  "anyhow",
  "async-stream",
