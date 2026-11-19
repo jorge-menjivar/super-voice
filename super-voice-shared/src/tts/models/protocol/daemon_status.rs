@@ -88,11 +88,11 @@ pub enum DaemonStatusEvent {
     UpdateAvailable { latest_version: String },
 
     /// A cloned voice is being handed to the loaded model, which has to derive
-    /// from the reference clip before it can speak in it.
+    /// from the reference recording before it can speak in it.
     ///
     /// This is why speech in a voice can be slow to start the first time: the
-    /// derivation is real GPU work on a clip the model has not seen, and it
-    /// happens whether it was triggered by saving the clip or by the first
+    /// derivation is real GPU work on a recording the model has not seen, and it
+    /// happens whether it was triggered by saving the recording or by the first
     /// request to speak in it. A client that shows it can say "preparing"
     /// instead of looking hung.
     ///

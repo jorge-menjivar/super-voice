@@ -248,10 +248,12 @@ impl VoiceLibrary {
                 CLIP_SAMPLE_RATE,
                 super_voice_shared::tts::utils::audio::ResampleQuality::HighQuality,
             )
-            .map_err(|e| VoiceError::Io(format!("resampling the clip failed: {e}")))?
+            .map_err(|e| VoiceError::Io(format!("resampling the recording failed: {e}")))?
         };
         if samples.is_empty() {
-            return Err(VoiceError::InvalidValue("clip contains no audio".into()));
+            return Err(VoiceError::InvalidValue(
+                "the recording contains no audio".into(),
+            ));
         }
         let bytes = wav::encode_s16(&samples, CLIP_SAMPLE_RATE)?;
 

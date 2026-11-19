@@ -8,7 +8,7 @@
 //! speak path is what hands it to a backend, the first time a loaded model is
 //! asked for that voice.
 //!
-//! **The clip is uploaded as a raw body, not JSON.** A recording is megabytes
+//! **The recording is uploaded as a raw body, not JSON.** A recording is megabytes
 //! of PCM; base64 in a JSON envelope would inflate it by a third and push it
 //! through a parser that exists for small objects. Metadata rides in the query
 //! string instead, which keeps adding a voice to one request.
@@ -67,7 +67,7 @@ pub(crate) struct NewVoice {
     /// Display name. A library of unnamed voices is unusable.
     #[serde(default)]
     label: Option<String>,
-    /// What the clip says, for models that clone in-context.
+    /// What the recording says, for models that clone in-context.
     #[serde(default)]
     transcript: Option<String>,
 }
@@ -95,7 +95,7 @@ the same value without its prefix, for building the paths under `/voice`.
 
 `model` is the answer to the three questions a voices UI has — whether to offer \
 cloning at all (`clones`), how much of a recording will actually be used \
-(`clone_ref_seconds`), and whether to ask the user what the clip says \
+(`clone_ref_seconds`), and whether to ask the user what the recording says \
 (`needs_transcript`). It is `null` when nothing is loaded: the library is still \
 readable, it just cannot be spoken with yet. The capability rides on this listing \
 rather than on the model catalog because this is where it is needed; the stored \
@@ -180,9 +180,9 @@ Multi-channel input is averaged down rather than having a channel picked, and \
 anything at another rate is resampled. WAV only: decoding compressed formats would \
 put a media parser inside a daemon that runs for the whole login session.
 
-The clip is capped at 120 seconds and 48 MiB, the label at 128 characters and the \
+The recording is capped at 120 seconds and 48 MiB, the label at 128 characters and the \
 transcript at 4000. A model's own `clone_ref_seconds` is applied on top when the \
-clip is handed over, so the whole recording is kept and switching models never asks \
+recording is handed over, so all of it is kept and switching models never asks \
 the user to record again.
 
 `201`, not `200`: a new resource exists at `/voice/{id}`.",
@@ -191,7 +191,7 @@ the user to record again.
          description = "Display name. Trimmed; empty is `400 invalid_value`.",
          example = "Ada"),
         ("transcript" = Option<String>, Query,
-         description = "What the clip says. Needed only by models that declare `clone_needs_transcript`, which condition on the words as well as the audio — supply it when you have it, since a model that needs it cannot use a voice stored without it.",
+         description = "What the recording says. Needed only by models that declare `clone_needs_transcript`, which condition on the words as well as the audio — supply it when you have it, since a model that needs it cannot use a voice stored without it.",
          example = "The quick brown fox jumps over the lazy dog."),
     ),
     request_body(content = String, content_type = "audio/wav",
@@ -199,7 +199,7 @@ the user to record again.
     security(("session_token" = ["voices"])),
     responses(
         (status = 201, description = "Stored. `voice.voice_id` is what `POST /speak` takes as `voice`.", body = VoiceResponse),
-        (status = 400, description = "Missing or empty `label`, an over-long label or transcript, an empty body (`invalid_value`); a body that is not a readable WAV (`unsupported_audio`); or a recording longer than 120 s (`clip_too_long`).", body = ErrorEnvelope),
+        (status = 400, description = "Missing or empty `label`, an over-long label or transcript, an empty body (`invalid_value`); a body that is not a readable WAV (`unsupported_audio`); or a recording longer than 120 s (`recording_too_long`).", body = ErrorEnvelope),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `voices` scope.", body = ErrorEnvelope),
         (status = 413, description = "The upload exceeded 48 MiB and was rejected before it was read.", body = ErrorEnvelope),
@@ -273,7 +273,7 @@ pub(crate) async fn create_voice(
         Err(e) => json_error_msg(
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal",
-            &format!("storing the clip failed: {e}"),
+            &format!("storing the recording failed: {e}"),
         ),
     }
 }
@@ -321,7 +321,7 @@ Changes the display name, and nothing else.
 
 The transcript is deliberately not editable. It describes the stored audio, and a \
 backend caches what it derived from the pair — changing it would leave every \
-registration already made disagreeing with the library. To change what the clip says, \
+registration already made disagreeing with the library. To change what the recording says, \
 add a new voice.
 
 Answers with the voice as it now stands.",
@@ -365,7 +365,7 @@ pub(crate) async fn rename_voice(
     tag = "voices",
     summary = "Forget a voice and its recording",
     description = "\
-Removes the stored clip and its metadata. `deleted` echoes the wire id that is gone.
+Removes the stored recording and its metadata. `deleted` echoes the wire id that is gone.
 
 If the model loaded at the time holds the voice, the daemon also asks the backend to \
 release it. That release is best-effort: the registration lives in the backend's \
@@ -409,7 +409,7 @@ pub(crate) async fn delete_voice(State(s): State<AppState>, Path(id): Path<Strin
     get,
     path = "/voice/{id}/audio",
     tag = "voices",
-    summary = "Download a voice's reference clip",
+    summary = "Download a voice's reference recording",
     description = "\
 The stored recording, so a client can let the user hear what a voice was built from.
 
@@ -424,7 +424,7 @@ This is the archive copy, whole. A model receives only as much of it as its \
             example = "2f8a2d0e-9c31-4e77-b0aa-1c6b2f0a51d4")),
     security(("session_token" = ["voices"])),
     responses(
-        (status = 200, description = "The stored clip: mono 16-bit PCM WAV at 24 kHz.",
+        (status = 200, description = "The stored recording: mono 16-bit PCM WAV at 24 kHz.",
          content_type = "audio/wav"),
         (status = 401, description = "Token unknown, expired, or its binary changed.", body = ReasonEnvelope),
         (status = 403, description = "The token lacks the `voices` scope.", body = ErrorEnvelope),
@@ -433,7 +433,7 @@ This is the archive copy, whole. A model receives only as much of it as its \
         (status = 503, description = "The library could not be read (`voice_library_unavailable`).", body = ErrorEnvelope),
     ),
 )]
-/// `GET /voice/{id}/audio` — the stored clip, so a client can play it back.
+/// `GET /voice/{id}/audio` — the stored recording, so a client can play it back.
 pub(crate) async fn voice_audio(State(s): State<AppState>, Path(id): Path<String>) -> Response {
     let library = Arc::clone(&s.daemon.voices);
     match tokio::task::spawn_blocking(move || library.clip_wav(&id)).await {
@@ -447,7 +447,7 @@ pub(crate) async fn voice_audio(State(s): State<AppState>, Path(id): Path<String
         Err(e) => json_error_msg(
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal",
-            &format!("reading the clip failed: {e}"),
+            &format!("reading the recording failed: {e}"),
         ),
     }
 }
@@ -526,9 +526,11 @@ fn error(e: &VoiceError) -> Response {
         VoiceError::InvalidValue(msg) => {
             json_error_msg(StatusCode::BAD_REQUEST, "invalid_value", msg)
         }
-        VoiceError::Audio(crate::tts::voices::wav::WavError::TooLong { .. }) => {
-            json_error_msg(StatusCode::BAD_REQUEST, "clip_too_long", &e.to_string())
-        }
+        VoiceError::Audio(crate::tts::voices::wav::WavError::TooLong { .. }) => json_error_msg(
+            StatusCode::BAD_REQUEST,
+            "recording_too_long",
+            &e.to_string(),
+        ),
         VoiceError::Audio(_) => {
             json_error_msg(StatusCode::BAD_REQUEST, "unsupported_audio", &e.to_string())
         }

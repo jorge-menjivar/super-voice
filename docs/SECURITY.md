@@ -88,8 +88,8 @@ ls -la "${XDG_RUNTIME_DIR:-$(getconf DARWIN_USER_TEMP_DIR)}/voice/super-voice-ht
 ### 3. Voice Library Privacy
 - **A scope of its own**: the cloned-voice library — recordings of the user's own voice — is reachable only with the `voices` scope. It is separate from `speak`, so an app that only talks never sees the recordings, and the consent prompt names it in those terms ("List, play back, and delete your saved voice recordings")
 - **Taking speech away is a scope of its own**: `POST /tts/synthesize` hands the client audio of any text in the user's chosen voice, cloned voices included, so it needs the `synthesize` scope rather than `speak`. The consent prompt says so ("Make spoken audio of any text, and keep it as a file"; "That audio is in your chosen voice, even one cloned from a recording"). See [`protocol/scopes/synthesize.md`](protocol/scopes/synthesize.md)
-- **Owner-only files**: each clip is written to `$XDG_DATA_HOME/super-voice/voices` with mode `0600`
-- **Stays on the machine**: a clip goes nowhere except to the loaded synthesis backend, which is local unless the user selected an online model. See [`protocol/scopes/voices.md`](protocol/scopes/voices.md)
+- **Owner-only files**: each recording is written to `$XDG_DATA_HOME/super-voice/voices` with mode `0600`
+- **Stays on the machine**: a recording goes nowhere except to the loaded synthesis backend, which is local unless the user selected an online model. See [`protocol/scopes/voices.md`](protocol/scopes/voices.md)
 
 ### 4. Network Isolation
 - **No network-facing listener**: The daemon listens on a per-user Unix domain socket under the runtime directory's `voice/`, and — for browser clients, on by default — on `127.0.0.1:7300`. It binds no other address and no UDP port, so no other host on the network can connect to it. A TCP client has no peer credentials, so it is identified by its origin instead; see [`protocol/auth.md` — TCP-bound clients](protocol/auth.md#tcp-bound-clients). `http.tcp` turns the TCP listener off
@@ -183,7 +183,7 @@ cargo run --release --bin super-voice-daemon
 - ✅ Unauthorized keyboard injection (reachable only with a consent-minted `transcribe`-scope token; auto-typing itself is the per-request `write_mode` flag)
 - ✅ Arbitrary command injection via keyboard
 - ✅ Unauthorized use of the speakers (reachable only with a consent-minted `speak`-scope token)
-- ✅ Unauthorized access to the user's voice recordings (a separate `voices` scope; clips are owner-only files)
+- ✅ Unauthorized access to the user's voice recordings (a separate `voices` scope; recordings are owner-only files)
 - ✅ Privilege escalation (runs as an unprivileged user service)
 - ✅ Memory exhaustion attacks (comprehensive input validation)
 - ✅ Connection flooding attacks (rate limiting and connection limits)

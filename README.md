@@ -51,7 +51,7 @@ Open **Super Voice** from your app launcher. Everything starts there:
 1. **Models:** pick a model for speech to text and one for text to speech, or install one from **Library → Browse**.
 2. **Speech to text → Behavior:** press **Test Recording**, speak, and the transcription appears in the app.
 3. **Text to speech → Behavior:** type something and press **Speak** to hear it.
-4. **Text to speech → Voices:** record or import a sample to clone your own voice.
+4. **Text to speech → Voices:** record your voice, or import a recording, to clone it.
 5. **Speech to text → Contexts:** say what you're dictating and list the words it should get right, like names and product terms.
 
 ### Dictate anywhere with a shortcut

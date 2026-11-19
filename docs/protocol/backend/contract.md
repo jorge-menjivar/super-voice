@@ -759,7 +759,7 @@ instantiated afresh for every request, so it holds the voice in its
 | Field         | Type   | Required | Notes                                                                                     |
 |---------------|--------|----------|-------------------------------------------------------------------------------------------|
 | `voice`       | string | yes      | The full wire id, prefix included. **The same string a later `/v1/synthesize` sends as `voice`** — key the cache by it and no mapping is needed. |
-| `transcript`  | string | no       | What the clip says. Present when the voice was stored with one; **guaranteed** present when the model declares `clone_needs_transcript`, because the daemon refuses to register a transcript-less clip against such a model. |
+| `transcript`  | string | no       | What the recording says. Present when the voice was stored with one; **guaranteed** present when the model declares `clone_needs_transcript`, because the daemon refuses to register a transcript-less recording against such a model. |
 | `sample_rate` | number | yes      | Always `24000` today; read it rather than assuming.                                        |
 | `channels`    | number | yes      | Always `1` today.                                                                          |
 | `format`      | string | yes      | Sample format in the `x-voice-format` vocabulary; always `s16le` today.                    |
@@ -770,7 +770,7 @@ like every other one on the contract — it happens once per voice, where the
 third of encoding overhead costs nothing and a second parsing path would cost a
 backend author real work.
 
-The clip has already been trimmed to `clone_ref_seconds`; a backend does not
+The recording has already been trimmed to `clone_ref_seconds`; a backend does not
 need to enforce its own bound, though refusing audio it genuinely cannot use is
 always allowed.
 

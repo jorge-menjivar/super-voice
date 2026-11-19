@@ -9,11 +9,11 @@ next takes ten — so the library keeps the whole recording and the daemon trims
 it per model when it hands it over. Switching models never asks the user to
 record again.
 
-The daemon pushes a clip to the loaded backend the **first time** a model is
+The daemon pushes a recording to the loaded backend the **first time** a model is
 asked to speak in that voice, over
 [`POST /v1/voices`](../../../backend/contract.md#post-v1voices) on the backend
 contract, and remembers that it did. Long text is split into one synthesis
-request per sentence, so pushing the clip with each request would re-upload and
+request per sentence, so pushing the recording with each request would re-upload and
 re-derive it a dozen times for one paragraph.
 
 Five paths, following the surface's convention that a collection is the `/list`
@@ -26,7 +26,7 @@ sub-resource of its singular noun:
 | [`/tts/voice/{id}`](#get-ttsvoiceid)          | `GET`    | One voice's metadata |
 | [`/tts/voice/{id}`](#patch-ttsvoiceid)        | `PATCH`  | Rename it |
 | [`/tts/voice/{id}`](#delete-ttsvoiceid)       | `DELETE` | Forget it and its recording |
-| [`/tts/voice/{id}/audio`](#get-ttsvoiceidaudio) | `GET`  | The stored clip, to play back |
+| [`/tts/voice/{id}/audio`](#get-ttsvoiceidaudio) | `GET`  | The stored recording, to play back |
 
 These are **cloned** voices. A model's **preset** voices are declared in its
 manifest and listed with the model on
@@ -43,7 +43,7 @@ the daemon refuses a shape the model did not opt into — see
 
 Speaking in a cloned voice needs `speak`, not `voices`.
 
-## What a stored clip looks like
+## What a stored recording looks like
 
 Every upload is converted to one canonical shape: **mono, 16-bit PCM, 24 kHz**.
 Multi-channel input is averaged down rather than having one channel picked, and
@@ -54,7 +54,7 @@ the speaker encoders in scope expect.
 | Bound                | Value       | Why                                                              |
 |----------------------|-------------|------------------------------------------------------------------|
 | Container            | WAV (PCM)   | 8/16/24/32-bit integer and 32-bit float. See [Formats](#formats). |
-| Longest clip         | 120 s       | The archive bound; a model's `clone_ref_seconds` is applied on top. |
+| Longest recording    | 120 s       | The archive bound; a model's `clone_ref_seconds` is applied on top. |
 | Largest upload       | 48 MiB      | Above 120 s of 48 kHz stereo 24-bit, so the duration error is the one users hit. |
 | Longest label        | 128 chars   |                                                                  |
 | Longest transcript   | 4000 chars  |                                                                  |
@@ -110,7 +110,7 @@ omitted entirely when the voice was stored without one.
 next request loads. It is `null` when there is neither. It is the answer to the
 three questions a voices UI has: whether to offer cloning at all (`clones`),
 how much of a recording will actually be used (`clone_ref_seconds`), and
-whether to ask the user what the clip says (`needs_transcript`). The library itself is
+whether to ask the user what the recording says (`needs_transcript`). The library itself is
 model-independent — these fields change when the user switches models, the
 stored voices do not.
 
@@ -136,7 +136,7 @@ RIFF….
 | Parameter    | Required | Meaning                                                                                     |
 |--------------|----------|---------------------------------------------------------------------------------------------|
 | `label`      | yes      | Display name. Trimmed; empty is `400 invalid_value`.                                          |
-| `transcript` | no       | What the clip says. Needed only by models that declare `clone_needs_transcript` — in-context cloning conditions on the words as well as the audio. Supply it when you have it: it costs nothing and a model that needs it cannot use a voice stored without it. |
+| `transcript` | no       | What the recording says. Needed only by models that declare `clone_needs_transcript` — in-context cloning conditions on the words as well as the audio. Supply it when you have it: it costs nothing and a model that needs it cannot use a voice stored without it. |
 
 **Response (201):**
 
@@ -167,7 +167,7 @@ Rename.
 
 Only the label. The transcript describes the stored audio, and a backend caches
 what it derived from the pair — changing it would leave every registration
-already made disagreeing with the library. To change what the clip says, add a
+already made disagreeing with the library. To change what the recording says, add a
 new voice.
 
 ## `DELETE /tts/voice/{id}`
@@ -191,7 +191,7 @@ either way.
 
 ## `GET /tts/voice/{id}/audio`
 
-The stored clip, so a client can let the user hear what a voice was built from.
+The stored recording, so a client can let the user hear what a voice was built from.
 
 ```http
 HTTP/1.1 200 OK
@@ -230,7 +230,7 @@ not. Deleting a voice mid-session does not stop an utterance already in flight.
 |------|-----------------------------|------------------------------------------------------------------------------|
 | 400  | `invalid_value`             | Missing or empty `label`, an over-long label or transcript, or an empty body. |
 | 400  | `unsupported_audio`         | The body is not a WAV file this daemon can read.                            |
-| 400  | `clip_too_long`             | The recording is longer than 120 s.                                          |
+| 400  | `recording_too_long`        | The recording is longer than 120 s.                                          |
 | 403  | `scope_denied`              | The token does not hold `voices`.                                            |
 | 404  | `not_found`                 | No voice with that id.                                                       |
 | 413  | `payload_too_large`         | The upload exceeded 48 MiB and was rejected before it was read.              |

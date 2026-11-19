@@ -50,7 +50,7 @@ pub enum WavError {
     Unsupported(String),
     /// The clip is longer than the caller's bound. Reported from the header,
     /// before any samples are decoded, so an oversized file costs nothing.
-    #[error("clip is {seconds:.1}s, longer than the {max:.0}s limit")]
+    #[error("the recording is {seconds:.1}s, longer than the {max:.0}s limit")]
     TooLong {
         /// Length the header describes.
         seconds: f32,
