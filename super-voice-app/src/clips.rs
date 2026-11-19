@@ -270,13 +270,13 @@ pub fn export_path(chosen: &Path) -> PathBuf {
     }
 }
 
-/// The name an exported clip is offered under: the app's name, that it is a
+/// The name an exported clip is offered under: `super_voice_`, that it is a
 /// clip, and when it was made, so a file found later says where it came from.
 #[must_use]
 pub fn export_name(clip: &Clip) -> String {
     format!(
-        "Super Voice clip {}.{AUDIO}",
-        clip.created.format("%Y-%m-%d %H-%M")
+        "super_voice_clip_{}.{AUDIO}",
+        clip.created.format("%Y-%m-%d_%H-%M")
     )
 }
 
@@ -496,7 +496,7 @@ mod tests {
             voice: None,
             seconds: 0.0,
         };
-        assert_eq!(export_name(&clip), "Super Voice clip 2026-11-18 21-53.wav");
+        assert_eq!(export_name(&clip), "super_voice_clip_2026-11-18_21-53.wav");
     }
 
     #[test]

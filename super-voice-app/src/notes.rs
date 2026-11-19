@@ -298,13 +298,13 @@ pub fn export_path(chosen: &Path) -> PathBuf {
     }
 }
 
-/// The name an exported note is offered under: the app's name, that it is a
+/// The name an exported note is offered under: `super_voice_`, that it is a
 /// note, and when it was made, so a file found later says where it came from.
 #[must_use]
 pub fn export_name(note: &Note) -> String {
     format!(
-        "Super Voice note {}.{EXTENSION}",
-        note.created.format("%Y-%m-%d %H-%M")
+        "super_voice_note_{}.{EXTENSION}",
+        note.created.format("%Y-%m-%d_%H-%M")
     )
 }
 
@@ -547,7 +547,7 @@ mod tests {
             created: created_from_id("2026-11-18_21-53-26").expect("a stamp"),
             text: String::new(),
         };
-        assert_eq!(export_name(&note), "Super Voice note 2026-11-18 21-53.md");
+        assert_eq!(export_name(&note), "super_voice_note_2026-11-18_21-53.md");
     }
 
     #[test]
