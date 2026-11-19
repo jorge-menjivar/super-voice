@@ -270,10 +270,14 @@ pub fn export_path(chosen: &Path) -> PathBuf {
     }
 }
 
-/// The name an exported clip is offered under: the time it was made.
+/// The name an exported clip is offered under: the app's name, that it is a
+/// clip, and when it was made, so a file found later says where it came from.
 #[must_use]
 pub fn export_name(clip: &Clip) -> String {
-    format!("Clip {}.{AUDIO}", clip.created.format("%Y-%m-%d %H-%M"))
+    format!(
+        "Super Voice clip {}.{AUDIO}",
+        clip.created.format("%Y-%m-%d %H-%M")
+    )
 }
 
 fn invalid(e: &hound::Error) -> io::Error {
@@ -481,6 +485,18 @@ mod tests {
         export(&dir, &clip.id, &to).await.expect("an export");
 
         assert_eq!(std::fs::read(to).expect("the export"), audio);
+    }
+
+    #[test]
+    fn an_export_is_offered_under_the_apps_name_and_the_time() {
+        let clip = Clip {
+            id: "2026-11-18_21-53-26".to_string(),
+            created: created_from_id("2026-11-18_21-53-26").expect("a stamp"),
+            text: String::new(),
+            voice: None,
+            seconds: 0.0,
+        };
+        assert_eq!(export_name(&clip), "Super Voice clip 2026-11-18 21-53.wav");
     }
 
     #[test]

@@ -298,10 +298,14 @@ pub fn export_path(chosen: &Path) -> PathBuf {
     }
 }
 
-/// The name an exported note is offered under: the time it was made.
+/// The name an exported note is offered under: the app's name, that it is a
+/// note, and when it was made, so a file found later says where it came from.
 #[must_use]
 pub fn export_name(note: &Note) -> String {
-    format!("Note {}.{EXTENSION}", note.created.format("%Y-%m-%d %H-%M"))
+    format!(
+        "Super Voice note {}.{EXTENSION}",
+        note.created.format("%Y-%m-%d %H-%M")
+    )
 }
 
 /// `text` with `more` said after it, as a paragraph of its own.
@@ -534,6 +538,16 @@ mod tests {
         let notes = list(dir).await.expect("a list");
         let texts: Vec<&str> = notes.iter().map(|n| n.text.as_str()).collect();
         assert_eq!(texts, ["said as the app closed", "newest words"]);
+    }
+
+    #[test]
+    fn an_export_is_offered_under_the_apps_name_and_the_time() {
+        let note = Note {
+            id: "2026-11-18_21-53-26".to_string(),
+            created: created_from_id("2026-11-18_21-53-26").expect("a stamp"),
+            text: String::new(),
+        };
+        assert_eq!(export_name(&note), "Super Voice note 2026-11-18 21-53.md");
     }
 
     #[test]
