@@ -26,7 +26,7 @@
 //! and ducking can be added without changing the endpoint's shape.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use super_voice_shared::tts::models::protocol::DaemonStatusEvent;
 
@@ -308,6 +308,10 @@ pub struct SpeechEngine {
     /// Written only under the [`current`](Self::current) lock, so a check
     /// against it and the slot claim it guards are one step.
     newest_started: AtomicU64,
+    /// How many [`synthesize_wav`](Self::synthesize_wav) calls are running.
+    /// They use the model without claiming the utterance slot, and the model
+    /// must not be put to sleep under them.
+    synthesizing: Arc<AtomicUsize>,
 }
 
 impl std::fmt::Debug for SpeechEngine {
@@ -451,6 +455,7 @@ impl SpeechEngine {
             voices: None,
             arrivals: AtomicU64::new(0),
             newest_started: AtomicU64::new(0),
+            synthesizing: Arc::default(),
         }
     }
 
@@ -468,6 +473,7 @@ impl SpeechEngine {
             voices: None,
             arrivals: AtomicU64::new(0),
             newest_started: AtomicU64::new(0),
+            synthesizing: Arc::default(),
         }
     }
 
@@ -492,6 +498,12 @@ impl SpeechEngine {
     pub fn with_voices(mut self, library: Arc<crate::tts::voices::VoiceLibrary>) -> Self {
         self.voices = Some(library);
         self
+    }
+
+    /// Whether a [`synthesize_wav`](Self::synthesize_wav) is running.
+    #[must_use]
+    pub fn is_synthesizing(&self) -> bool {
+        self.synthesizing.load(Ordering::SeqCst) > 0
     }
 
     /// The id of the utterance currently in flight, if any.
@@ -878,6 +890,80 @@ impl SpeechEngine {
         session.push(text).await?;
         session.end().await
     }
+
+    /// Synthesize `text` with the loaded model into one mono 16-bit WAV,
+    /// played nowhere.
+    ///
+    /// The speak path without the speakers: the same normalizing, chunking
+    /// and cloned-voice handling, so a clip sounds as the same text spoken
+    /// would. It is not an utterance: it neither interrupts what is playing
+    /// nor is interrupted by it, and it publishes no speaking events. While it
+    /// runs the model counts as in use, so it is not put to sleep partway.
+    ///
+    /// Dropping the future stops it between backend reads: a client that
+    /// hangs up takes the synthesis with it.
+    ///
+    /// # Errors
+    /// See [`SpeakError`].
+    pub async fn synthesize_wav(
+        &self,
+        model: &SharedLoadedModel,
+        text: &str,
+        voice: Option<&str>,
+        language: Option<&str>,
+    ) -> Result<Vec<u8>, SpeakError> {
+        check_text(text)?;
+        let _running = Synthesizing::start(&self.synthesizing);
+        let (policy, name) = {
+            let guard = model.read().await;
+            let loaded = guard.as_ref().ok_or(SpeakError::NotLoaded)?;
+            if let Some(voice) = voice {
+                check_voice(&loaded.definition, voice)?;
+                self.ensure_cloned_voice(loaded, voice).await?;
+            }
+            (
+                ChunkPolicy::for_model(loaded.definition.product.max_input_chars),
+                loaded.definition.name.clone(),
+            )
+        };
+
+        let mut normalizer = crate::tts::text::normalize::Normalizer::new();
+        let mut chunker = Chunker::new(policy);
+        let mut chunks = chunker.push(&normalizer.push(text));
+        chunks.extend(chunker.push(&normalizer.finish()));
+        chunks.extend(chunker.finish());
+
+        let mut out = crate::tts::daemon::synthesis::Assembler::default();
+        for chunk in chunks.iter().filter(|c| !c.trim().is_empty()) {
+            let request = SynthesizeRequest {
+                text: chunk,
+                voice,
+                language,
+                speed: None,
+                instructions: None,
+            };
+            let mut sink = crate::tts::daemon::synthesis::CollectSink::default();
+            synthesize_chunk(
+                model,
+                Some(&name),
+                self.voices.as_ref(),
+                self.events.as_ref(),
+                &request,
+                &mut sink,
+            )
+            .await?
+            .map_err(|e| SpeakError::Synthesis(e.to_string()))?;
+            if let Some((samples, params)) = sink.into_audio() {
+                out.push(&samples, params)
+                    .map_err(|e| SpeakError::Synthesis(e.to_string()))?;
+            }
+        }
+        // Idle time counts from the end of the work, as it does for speech.
+        model.touch();
+        out.finish()
+            .map_err(|e| SpeakError::Synthesis(e.to_string()))?
+            .ok_or_else(|| SpeakError::Synthesis("the model produced no audio".to_string()))
+    }
 }
 
 /// One streaming utterance.
@@ -1146,36 +1232,15 @@ impl SpeakSession {
             speed: None,
             instructions: None,
         };
-        let result = {
-            let guard = self.model.read().await;
-            let Some(loaded) = guard.as_ref() else {
-                return Err(SpeakError::NotLoaded);
-            };
-            let mut result = loaded.instance.synthesize(&request, sink).await;
-            // A backend can lose a cloned voice the daemon gave it: a
-            // subprocess backend that was started again, a WASM backend whose
-            // private `/tmp` went away. It says so before any audio, so the
-            // chunk is tried again, once, after giving it the voice again.
-            // Only for a voice this instance was given: one it never had is
-            // the ordinary `unknown_voice`.
-            if let (Err(e), Some(voice)) = (&result, request.voice)
-                && crate::tts::tts_models::v1::is_unknown_voice(e)
-                && loaded.cloned_voices.lock().remove(voice)
-            {
-                info!(
-                    "{} no longer has voice {voice}; registering it again",
-                    loaded.definition.name
-                );
-                result =
-                    match ensure_registered(self.voices.as_ref(), self.bus.as_ref(), loaded, voice)
-                        .await
-                    {
-                        Ok(()) => loaded.instance.synthesize(&request, sink).await,
-                        Err(e) => Err(anyhow::Error::new(e)),
-                    };
-            }
-            result
-        };
+        let result = synthesize_chunk(
+            &self.model,
+            None,
+            self.voices.as_ref(),
+            self.bus.as_ref(),
+            &request,
+            sink,
+        )
+        .await?;
         self.marks = sink.marks;
 
         match result {
@@ -1195,6 +1260,73 @@ impl SpeakSession {
                 Err(SpeakError::Synthesis(e.to_string()))
             }
         }
+    }
+}
+
+/// Synthesize one chunk with the loaded model into `sink`.
+///
+/// A backend can lose a cloned voice the daemon gave it: a subprocess backend
+/// that was started again, a WASM backend whose private `/tmp` went away. It
+/// says so before any audio, so the chunk is tried again, once, after giving
+/// it the voice again. Only for a voice this instance was given: one it never
+/// had is the ordinary `unknown_voice`.
+///
+/// With `expect`, the loaded model must still be that one: a synthesis that
+/// joins its chunks into one file must not mix two models' voices.
+///
+/// The outer error is the daemon's (no model, a changed model, a voice it
+/// could not give again); the inner one is the backend's.
+async fn synthesize_chunk(
+    model: &SharedLoadedModel,
+    expect: Option<&str>,
+    voices: Option<&Arc<crate::tts::voices::VoiceLibrary>>,
+    bus: Option<&Arc<crate::tts::daemon::events::EventBus>>,
+    request: &SynthesizeRequest<'_>,
+    sink: &mut (dyn SynthesisSink + Send),
+) -> Result<Result<()>, SpeakError> {
+    let guard = model.read().await;
+    let Some(loaded) = guard.as_ref() else {
+        return Err(SpeakError::NotLoaded);
+    };
+    if let Some(name) = expect
+        && loaded.definition.name != name
+    {
+        return Err(SpeakError::Synthesis(format!(
+            "the model changed from {name} to {} partway through",
+            loaded.definition.name
+        )));
+    }
+    let mut result = loaded.instance.synthesize(request, sink).await;
+    if let (Err(e), Some(voice)) = (&result, request.voice)
+        && crate::tts::tts_models::v1::is_unknown_voice(e)
+        && loaded.cloned_voices.lock().remove(voice)
+    {
+        info!(
+            "{} no longer has voice {voice}; registering it again",
+            loaded.definition.name
+        );
+        result = match ensure_registered(voices, bus, loaded, voice).await {
+            Ok(()) => loaded.instance.synthesize(request, sink).await,
+            Err(e) => Err(anyhow::Error::new(e)),
+        };
+    }
+    Ok(result)
+}
+
+/// Counts a [`SpeechEngine::synthesize_wav`] as running, for as long as it
+/// lives.
+struct Synthesizing(Arc<AtomicUsize>);
+
+impl Synthesizing {
+    fn start(count: &Arc<AtomicUsize>) -> Self {
+        count.fetch_add(1, Ordering::SeqCst);
+        Self(Arc::clone(count))
+    }
+}
+
+impl Drop for Synthesizing {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -1551,6 +1683,30 @@ pub(crate) fn check_voice(
     Ok(())
 }
 
+/// The coded answer a request to speak, or to synthesize, gets when `err`
+/// stops it.
+pub(crate) fn speech_refusal(
+    err: SpeakError,
+) -> super_voice_shared::tts::models::protocol::DaemonResponse {
+    use super_voice_shared::tts::models::protocol::{DaemonResponse, ErrorCode};
+    match err {
+        e @ (SpeakError::EmptyText | SpeakError::TextTooLong | SpeakError::UnknownVoice(_)) => {
+            DaemonResponse::error_with_code(ErrorCode::InvalidValue, &e.to_string())
+        }
+        SpeakError::NotLoaded => {
+            DaemonResponse::error_with_code(ErrorCode::ModelNotLoaded, "model_not_loaded")
+        }
+        SpeakError::VoiceRequired(model) => DaemonResponse::error_with_code(
+            ErrorCode::VoiceRequired,
+            &format!(
+                "{model} speaks only in a voice the user chooses, and none is chosen; \
+                 set one with POST /tts/pipeline/1/model/{model}/voice"
+            ),
+        ),
+        e => DaemonResponse::error(&e.to_string()),
+    }
+}
+
 impl crate::tts::daemon::types::SuperTTSDaemon {
     /// Handle `Command::Speak`.
     ///
@@ -1627,6 +1783,30 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         }
     }
 
+    /// Handle `POST /tts/synthesize`: `text` spoken into a WAV file for the
+    /// client, in the voice and language `speak` would use, and played
+    /// nowhere.
+    ///
+    /// Checked as `speak` is, in the same order, but refused without a
+    /// desktop notice: the caller is an app showing its own answer, not a
+    /// shortcut with no window.
+    ///
+    /// # Errors
+    /// Why it was refused; [`speech_refusal`] is the coded answer.
+    pub async fn handle_synthesize(&self, text: &str) -> Result<Vec<u8>, SpeakError> {
+        check_text(text)?;
+        if let Some(model) = self.voice_still_to_choose().await {
+            return Err(SpeakError::VoiceRequired(model));
+        }
+        if self.stage().ensure_loaded().await.is_err() {
+            return Err(SpeakError::NotLoaded);
+        }
+        let (voice, language) = self.stored_defaults().await;
+        self.speech
+            .synthesize_wav(&self.model, text, voice.as_deref(), language.as_deref())
+            .await
+    }
+
     /// Answer a `speak` that could not be served, with the coded error its
     /// cause maps to.
     async fn refuse_speech(
@@ -1634,7 +1814,6 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         err: SpeakError,
     ) -> super_voice_shared::tts::models::protocol::DaemonResponse {
         use crate::tts::output::notice::{Failure, Origin};
-        use super_voice_shared::tts::models::protocol::{DaemonResponse, ErrorCode};
 
         // A `speak` is as likely to come from a keyboard shortcut as from an
         // app, and a shortcut has no UI to show the coded error to. So every
@@ -1660,22 +1839,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
             crate::tts::output::notification::deliver(method, &mut notifier, &failure).await;
         }
 
-        match err {
-            e @ (SpeakError::EmptyText | SpeakError::TextTooLong | SpeakError::UnknownVoice(_)) => {
-                DaemonResponse::error_with_code(ErrorCode::InvalidValue, &e.to_string())
-            }
-            SpeakError::NotLoaded => {
-                DaemonResponse::error_with_code(ErrorCode::ModelNotLoaded, "model_not_loaded")
-            }
-            SpeakError::VoiceRequired(model) => DaemonResponse::error_with_code(
-                ErrorCode::VoiceRequired,
-                &format!(
-                    "{model} speaks only in a voice the user chooses, and none is chosen; \
-                     set one with POST /tts/pipeline/1/model/{model}/voice"
-                ),
-            ),
-            e => DaemonResponse::error(&e.to_string()),
-        }
+        speech_refusal(err)
     }
 
     /// Open a streaming session with the configured defaults already resolved.

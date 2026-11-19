@@ -109,6 +109,7 @@ const URL_SURFACE: &[(&str, &str)] = &[
     ("/v1/tts/speak/read", "post"),
     ("/v1/tts/speak/stop", "post"),
     ("/v1/tts/speak/stream", "get"),
+    ("/v1/tts/synthesize", "post"),
     ("/v1/tts/voice", "post"),
     ("/v1/tts/voice/list", "get"),
     ("/v1/tts/voice/{id}", "delete,get,patch"),

@@ -33,11 +33,13 @@ need, and the user approves that set.
 | `global_transcriptions` | Subscribe to **every** app's live + final transcription text on `/events`   | [global_transcriptions](./scopes/global_transcriptions.md) |
 | `daemon_status`         | Subscribe to model/device/download/registry status on `/events`             | [daemon_status](./scopes/daemon_status.md)         |
 | `speak`                 | Play synthesized speech; stop speech, including another app's               | [speak](./scopes/speak.md)                         |
+| `synthesize`            | Make spoken audio of any text and take it away as a WAV file                 | [synthesize](./scopes/synthesize.md)               |
 | `voices`                | Add, list, play back, rename, and delete cloned-voice recordings            | [voices](./scopes/voices.md)                       |
 | `playback_events`       | Subscribe to speaking-state and playback-progress events on `/events`       | [playback_events](./scopes/playback_events.md)     |
 
 `transcribe`, `recording_events` and `global_transcriptions` belong to speech
-to text; `speak`, `voices` and `playback_events` to text to speech. The rest
+to text; `speak`, `synthesize`, `voices` and `playback_events` to text to
+speech. The rest
 are shared by both features.
 
 A Settings UI, for example, requests several at once
@@ -326,6 +328,7 @@ docs — those are the source of truth, not duplicated here:
 
 - `transcribe` — `/stt/transcribe`, `/stt/transcribe/stop`, `/stt/transcribe/realtime`; see [transcribe.md](./scopes/transcribe.md).
 - `speak` — `/tts/speak`, `/tts/speak/stop`, `/tts/speak/stream`; see [speak.md](./scopes/speak.md).
+- `synthesize` — `/tts/synthesize`; see [synthesize.md](./scopes/synthesize.md).
 - `status` — `GET /status`; see [status.md](./scopes/status.md).
 - `settings` — the configuration + registry surface, including backend options; see [settings.md](./scopes/settings.md).
 - `secrets` — backend credential management: `GET /backend/{backend_id}/secret/list` and `GET/POST/DELETE /backend/{backend_id}/secret/{name}` (write-only; values never returned); see [secrets.md](./scopes/secrets.md).

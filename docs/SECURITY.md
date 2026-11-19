@@ -87,6 +87,7 @@ ls -la "${XDG_RUNTIME_DIR:-$(getconf DARWIN_USER_TEMP_DIR)}/voice/super-voice-ht
 
 ### 3. Voice Library Privacy
 - **A scope of its own**: the cloned-voice library — recordings of the user's own voice — is reachable only with the `voices` scope. It is separate from `speak`, so an app that only talks never sees the recordings, and the consent prompt names it in those terms ("List, play back, and delete your saved voice recordings")
+- **Taking speech away is a scope of its own**: `POST /tts/synthesize` hands the client audio of any text in the user's chosen voice, cloned voices included, so it needs the `synthesize` scope rather than `speak`. The consent prompt says so ("Make spoken audio of any text, and keep it as a file"; "That audio is in your chosen voice, even one cloned from a recording"). See [`protocol/scopes/synthesize.md`](protocol/scopes/synthesize.md)
 - **Owner-only files**: each clip is written to `$XDG_DATA_HOME/super-voice/voices` with mode `0600`
 - **Stays on the machine**: a clip goes nowhere except to the loaded synthesis backend, which is local unless the user selected an online model. See [`protocol/scopes/voices.md`](protocol/scopes/voices.md)
 
@@ -96,7 +97,7 @@ ls -la "${XDG_RUNTIME_DIR:-$(getconf DARWIN_USER_TEMP_DIR)}/voice/super-voice-ht
 - **Outbound only for backend installs**: The daemon reaches the network solely to fetch backends over HTTPS from the registry / GitHub — see [Daemon outbound network surface](#daemon-outbound-network-surface) below
 
 ### 5. Consent &amp; Peer Identity
-- **Session tokens + scopes**: Every request other than `/auth/request` requires a `Bearer` session token; each token carries the user-approved scopes that gate what it may do (`transcribe`, `speak`, `voices`, `settings`, `secrets`, `status`, and the event-topic scopes, `playback_events` among them — see [`protocol/auth.md`](protocol/auth.md) for the full catalog)
+- **Session tokens + scopes**: Every request other than `/auth/request` requires a `Bearer` session token; each token carries the user-approved scopes that gate what it may do (`transcribe`, `speak`, `synthesize`, `voices`, `settings`, `secrets`, `status`, and the event-topic scopes, `playback_events` among them — see [`protocol/auth.md`](protocol/auth.md) for the full catalog)
 - **One-time consent**: Tokens are minted only after a popup naming the requesting binary (resolved from the kernel's peer credentials) and the scopes it asks for, which the user approves or denies. The popup is the `super-voice-consent` helper on Linux and an `osascript` dialog on macOS, where the helper's Wayland layer-shell surface has no counterpart; both render the same scope descriptions, from `super_voice_shared::consent`
 - **Same-UID only**: A peer whose UID differs from the daemon's is rejected before any prompt
 - See [`protocol/auth.md`](protocol/auth.md) for the full token, scope, and consent contract

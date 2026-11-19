@@ -731,3 +731,233 @@ async fn a_stop_overrules_a_request_still_waiting_to_start() {
         .await
         .expect("a request after the stop speaks");
 }
+
+// --- Speech kept as a file ---------------------------------------------------
+
+use super_voice_shared::tts::audio::frames::{Frame, FrameKind};
+
+/// What a [`ToneBackend`] did, and what it waits on.
+#[derive(Default)]
+struct ToneLog {
+    /// The text of every synthesis request, in order.
+    texts: Mutex<Vec<String>>,
+    /// Released once per request when set: lets a test hold a synthesis
+    /// mid-way.
+    gate: Option<Arc<tokio::sync::Semaphore>>,
+    /// Told when a request has started, before it waits on the gate.
+    started: Option<Arc<tokio::sync::Notify>>,
+}
+
+/// A backend that answers each request with a constant tone, ten samples per
+/// character, mono at 24 kHz, or with no audio at all when `silent`.
+struct ToneBackend {
+    info: ModelInfoData,
+    log: Arc<ToneLog>,
+    silent: bool,
+}
+
+impl ModelInfo for ToneBackend {
+    fn info(&self) -> &ModelInfoData {
+        &self.info
+    }
+}
+
+impl ModelState for ToneBackend {
+    fn device(&self) -> String {
+        "cpu".to_string()
+    }
+}
+
+#[async_trait::async_trait]
+impl Synthesize for ToneBackend {
+    async fn synthesize(
+        &self,
+        request: &SynthesizeRequest<'_>,
+        sink: &mut (dyn SynthesisSink + Send),
+    ) -> anyhow::Result<()> {
+        self.log
+            .texts
+            .lock()
+            .unwrap()
+            .push(request.text.to_string());
+        if let Some(started) = &self.log.started {
+            started.notify_one();
+        }
+        if let Some(gate) = &self.log.gate {
+            gate.acquire().await.unwrap().forget();
+        }
+        sink.on_params(AudioParams {
+            sample_rate: 24_000,
+            channels: 1,
+            format: SampleFormat::F32Le,
+        })?;
+        if self.silent {
+            return Ok(());
+        }
+        let samples = 10 * request.text.chars().count();
+        let payload: Vec<u8> = std::iter::repeat_n(0.5_f32, samples)
+            .flat_map(f32::to_le_bytes)
+            .collect();
+        sink.on_frame(Frame {
+            kind: FrameKind::Audio,
+            payload,
+        })
+    }
+}
+
+/// A shared model answering with tones, named `name`.
+async fn tone_model(
+    name: &str,
+    log: Arc<ToneLog>,
+    silent: bool,
+) -> crate::tts::daemon::types::SharedLoadedModel {
+    let model: crate::tts::daemon::types::SharedLoadedModel = Arc::default();
+    crate::tts::daemon::types::put_model(&model, tone_loaded(name, log, silent)).await;
+    model
+}
+
+fn tone_loaded(name: &str, log: Arc<ToneLog>, silent: bool) -> LoadedModel {
+    let mut definition = model(vec![VoiceKind::Preset], &["af_heart"]);
+    definition.name = name.to_string();
+    let backend = ToneBackend {
+        info: ModelInfoData::new(
+            definition.name.clone(),
+            definition.source.clone(),
+            true,
+            false,
+            Duration::from_millis(0),
+        ),
+        log,
+        silent,
+    };
+    LoadedModel::new(definition, Box::new(backend))
+}
+
+fn wav_of(bytes: &[u8]) -> (hound::WavSpec, usize) {
+    let reader = hound::WavReader::new(std::io::Cursor::new(bytes)).expect("a WAV");
+    (reader.spec(), reader.len() as usize)
+}
+
+/// Every sentence is synthesized, and the audio comes back as one mono
+/// 16-bit file at the model's rate, as long as all of it together.
+#[tokio::test]
+async fn a_synthesis_comes_back_as_one_file_of_every_sentence() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _library) = engine(dir.path());
+    let log = Arc::new(ToneLog::default());
+    let model = tone_model("tone", Arc::clone(&log), false).await;
+
+    let wav = engine
+        .synthesize_wav(
+            &model,
+            "The first sentence. And the second one.",
+            None,
+            None,
+        )
+        .await
+        .expect("a file");
+
+    let texts = log.texts.lock().unwrap().clone();
+    assert!(!texts.is_empty());
+    let chars: usize = texts.iter().map(|t| t.chars().count()).sum();
+    let (spec, samples) = wav_of(&wav);
+    assert_eq!(spec.channels, 1);
+    assert_eq!(spec.sample_rate, 24_000);
+    assert_eq!(spec.bits_per_sample, 16);
+    assert_eq!(
+        samples,
+        10 * chars,
+        "every chunk's audio, end to end: {texts:?}"
+    );
+}
+
+/// A synthesis is not an utterance: it holds no utterance slot, and nothing
+/// shows it as speaking. While it runs the model counts as in use.
+#[tokio::test]
+async fn a_synthesis_is_not_an_utterance_but_keeps_the_model_in_use() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _library) = engine(dir.path());
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    let started = Arc::new(tokio::sync::Notify::new());
+    let log = Arc::new(ToneLog {
+        gate: Some(Arc::clone(&gate)),
+        started: Some(Arc::clone(&started)),
+        ..ToneLog::default()
+    });
+    let model = tone_model("tone", log, false).await;
+    let engine = Arc::new(engine);
+
+    let running = tokio::spawn({
+        let engine = Arc::clone(&engine);
+        let model = Arc::clone(&model);
+        async move { engine.synthesize_wav(&model, "Held.", None, None).await }
+    });
+    started.notified().await;
+    assert!(engine.is_synthesizing(), "in use while it runs");
+    assert!(engine.current().is_none(), "no utterance slot is taken");
+
+    gate.add_permits(16);
+    running.await.unwrap().expect("a file");
+    assert!(!engine.is_synthesizing(), "and no longer once done");
+}
+
+/// Text that cannot be spoken is refused before the backend hears of it.
+#[tokio::test]
+async fn a_synthesis_of_nothing_is_refused_before_the_backend() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _library) = engine(dir.path());
+    let log = Arc::new(ToneLog::default());
+    let model = tone_model("tone", Arc::clone(&log), false).await;
+
+    let err = engine
+        .synthesize_wav(&model, "   ", None, None)
+        .await
+        .expect_err("nothing to say");
+    assert!(matches!(err, SpeakError::EmptyText), "{err:?}");
+    assert!(log.texts.lock().unwrap().is_empty());
+}
+
+/// One file is one model's voice: a chunk asked of a model other than the
+/// one the synthesis began with is refused before the backend hears of it,
+/// so a model switched partway fails the synthesis instead of finishing it
+/// in another voice.
+#[tokio::test]
+async fn a_chunk_for_a_model_no_longer_loaded_is_refused() {
+    let log = Arc::new(ToneLog::default());
+    let model = tone_model("second", Arc::clone(&log), false).await;
+    let request = SynthesizeRequest {
+        text: "Hello there.",
+        voice: None,
+        language: None,
+        speed: None,
+        instructions: None,
+    };
+    let mut sink = crate::tts::daemon::synthesis::CollectSink::default();
+
+    let err = super::synthesize_chunk(&model, Some("first"), None, None, &request, &mut sink)
+        .await
+        .expect_err("the model changed");
+
+    assert!(
+        matches!(&err, SpeakError::Synthesis(m) if m.contains("changed from first to second")),
+        "{err:?}"
+    );
+    assert!(log.texts.lock().unwrap().is_empty());
+}
+
+/// A model that answers with no audio at all is a failure, not an empty file.
+#[tokio::test]
+async fn a_synthesis_with_no_audio_is_a_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _library) = engine(dir.path());
+    let model = tone_model("silent", Arc::new(ToneLog::default()), true).await;
+
+    let err = engine
+        .synthesize_wav(&model, "Say nothing.", None, None)
+        .await
+        .expect_err("no audio");
+    assert!(
+        matches!(&err, SpeakError::Synthesis(m) if m.contains("no audio")),
+        "{err:?}"
+    );
+}

@@ -56,13 +56,16 @@ fn removed_fields_named(body: &Value) -> Vec<&'static str> {
 /// client that asks for a voice and is silently given a different one has no
 /// way to find out. A `400` naming the field and where the setting now lives
 /// turns a wrong-voice mystery into a one-line fix.
-fn refuse_removed_fields(body: &Value) -> Option<Response> {
+///
+/// `path` is the endpoint refusing, for the message: `POST /tts/synthesize`
+/// takes the same body and refuses the same fields.
+pub(super) fn refuse_removed_fields(body: &Value, path: &str) -> Option<Response> {
     let named = removed_fields_named(body);
     if named.is_empty() {
         return None;
     }
     let message = format!(
-        "{} {} no longer accepted on /tts/speak; how an utterance is spoken is \
+        "{} {} no longer accepted on {path}; how an utterance is spoken is \
          configuration — set a voice with POST /tts/pipeline/{{stage}}/model/{{model}}/voice \
          and a language with POST /settings/language",
         named.join(", "),
@@ -205,7 +208,7 @@ pub(crate) async fn speak(
         ))
         .into_response();
     }
-    if let Some(refusal) = refuse_removed_fields(&body) {
+    if let Some(refusal) = refuse_removed_fields(&body, "/tts/speak") {
         return refusal;
     }
 

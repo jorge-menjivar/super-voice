@@ -230,7 +230,8 @@ impl SuperTTSDaemon {
     }
 
     /// Whether the model is currently occupied — an utterance is being
-    /// synthesized or played out.
+    /// synthesized or played out, or speech is being synthesized for a client
+    /// to keep (`POST /tts/synthesize`).
     ///
     /// Derived from the speech engine's slot rather than mirrored into a
     /// separate flag. The STT build carried a `busy: RwLock<bool>` alongside
@@ -239,7 +240,7 @@ impl SuperTTSDaemon {
     /// to have stale.
     #[must_use]
     pub fn is_busy(&self) -> bool {
-        self.speech.current().is_some()
+        self.speech.current().is_some() || self.speech.is_synthesizing()
     }
 
     /// Persist the current config to disk. Settings handlers call this

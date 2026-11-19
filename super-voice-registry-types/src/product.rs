@@ -42,6 +42,7 @@ pub static SUPER_VOICE: ProductSpec = ProductSpec {
         "recording_events",
         "global_transcriptions",
         "speak",
+        "synthesize",
         "voices",
         "playback_events",
     ],

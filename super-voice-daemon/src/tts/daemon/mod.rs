@@ -14,6 +14,7 @@ pub mod read_handlers;
 pub mod speech;
 pub mod startup;
 pub mod status_handlers;
+pub(crate) mod synthesis;
 #[cfg(test)]
 pub(crate) mod test_fixtures;
 pub mod types;
