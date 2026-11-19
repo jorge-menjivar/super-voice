@@ -239,6 +239,10 @@ pub(super) enum ModelStatus {
     /// The stage is switched on but its model is not running: it failed to
     /// come up, or the last load failed. Red.
     Failed,
+    /// The synthesis model is loaded, or loads on its next use, but has no
+    /// voice to speak in: a cloning model before a voice is chosen. Red, as
+    /// [`Self::Blocked`] is: the next use would fail.
+    NoVoice,
 }
 
 impl ModelStatus {
@@ -251,6 +255,8 @@ impl ModelStatus {
             Self::Ready => crate::fl!("model-loaded-and-ready"),
             Self::Idle => crate::fl!("model-ready"),
             Self::Failed => crate::fl!("the-selected-model-isn-t-loaded"),
+            // The words the card's voice dropdown shows for the same state.
+            Self::NoVoice => crate::fl!("no-cloned-voice-chosen"),
         }
     }
 }
@@ -302,7 +308,8 @@ pub(super) fn classify_model_status(
 /// A download or load in flight reads as [`NotLoaded`](ModelStatus::NotLoaded)
 /// whatever the stage reports, since nothing is up yet but nothing is wrong
 /// either; a failed one reads as [`Failed`](ModelStatus::Failed) until the
-/// next attempt.
+/// next attempt. A synthesis model with nothing to speak in reads as
+/// [`NoVoice`](ModelStatus::NoVoice) rather than ready.
 pub(super) fn stage_status(app: &AppModel, stage: crate::state::Stage) -> ModelStatus {
     use crate::state::model_operations::ModelOperationState;
     match app.model_operations.get(stage) {
@@ -320,7 +327,47 @@ pub(super) fn stage_status(app: &AppModel, stage: crate::state::Stage) -> ModelS
             &app.backend_secret_configured,
         ),
     };
-    idle_when(status, app.idle_model(stage).is_some())
+    let status = idle_when(status, app.idle_model(stage).is_some());
+    if stage == crate::state::Stage::Synthesis {
+        let block = app.block(crate::state::BlockStage::Synthesis);
+        return without_voice(status, speaks_in_nothing(block, &app.voice));
+    }
+    status
+}
+
+/// Whether the synthesis stage's model has nothing to speak in, as far as the
+/// app knows.
+///
+/// The voice the app holds is for the model on the synthesis card, which can
+/// be a staged model rather than the one in the stage. Only a resolution for
+/// the stage's own model counts: for any other, the answer is unknown, and an
+/// unknown is not a warning.
+fn speaks_in_nothing(
+    block: &crate::daemon::client::v1::pipeline::StageState,
+    voice: &crate::state::VoiceState,
+) -> bool {
+    let (Some(source), Some(model)) = (block.source.as_deref(), block.model.as_deref()) else {
+        return false;
+    };
+    let Some((voice_source, voice_model)) = voice.target.as_ref() else {
+        return false;
+    };
+    voice_source == source
+        && voice_model == model
+        && voice
+            .resolution
+            .as_ref()
+            .is_some_and(crate::state::VoiceResolution::has_no_voice)
+}
+
+/// `status` for a synthesis stage, when its model has `no_voice`. Only a stage
+/// that would read as ready changes: one that is not set up, not running or
+/// not loaded already says what is wrong first.
+fn without_voice(status: ModelStatus, no_voice: bool) -> ModelStatus {
+    match status {
+        ModelStatus::Ready | ModelStatus::Idle if no_voice => ModelStatus::NoVoice,
+        other => other,
+    }
 }
 
 /// `status` for a stage whose model is out of memory until its next use, when
@@ -365,7 +412,8 @@ mod model_status_tests {
     //! Pin the status-dot rule. The states are: no backend selected → gray;
     //! backend selected but requirements unmet → red; ready but no model
     //! loaded → yellow; model loaded → green; out of memory until its next
-    //! use → green; switched on but not running → red.
+    //! use → green; switched on but not running → red; a synthesis model with
+    //! nothing to speak in → red.
     use super::*;
     use crate::daemon::backends::{BackendInfo, BackendModel, BackendSecret};
     use crate::daemon::client::v1::pipeline::StageState;
@@ -582,5 +630,74 @@ mod model_status_tests {
         for status in [ModelStatus::Blocked, ModelStatus::Ready, ModelStatus::None] {
             assert_eq!(idle_when(status, true), status);
         }
+    }
+
+    fn voice_state(
+        target: Option<(&str, &str)>,
+        effective: Option<&str>,
+        kinds: &[&str],
+    ) -> crate::state::VoiceState {
+        crate::state::VoiceState {
+            resolution: Some(crate::state::VoiceResolution {
+                effective: effective.map(ToString::to_string),
+                kinds: kinds.iter().map(ToString::to_string).collect(),
+                ..Default::default()
+            }),
+            choices: Vec::new(),
+            target: target.map(|(s, m)| (s.to_string(), m.to_string())),
+        }
+    }
+
+    /// A cloning model with no voice chosen cannot speak, so its stage is not
+    /// ready, loaded or idle: the bug was a green dot over the card's warning.
+    #[test]
+    fn a_synthesis_model_with_no_voice_is_not_ready() {
+        let stage = block(Some(OPENAI), true, true);
+        let voice = voice_state(Some((OPENAI, "whisper-1")), None, &["cloned"]);
+        assert!(speaks_in_nothing(&stage, &voice));
+        assert_eq!(
+            without_voice(ModelStatus::Ready, true),
+            ModelStatus::NoVoice
+        );
+        assert_eq!(without_voice(ModelStatus::Idle, true), ModelStatus::NoVoice);
+    }
+
+    /// A voice in effect, or a model that speaks in described voices, has
+    /// something to speak in.
+    #[test]
+    fn a_voice_or_a_description_is_something_to_speak_in() {
+        let stage = block(Some(OPENAI), true, true);
+        let chosen = voice_state(Some((OPENAI, "whisper-1")), Some("voice:1"), &["cloned"]);
+        assert!(!speaks_in_nothing(&stage, &chosen));
+        let described = voice_state(Some((OPENAI, "whisper-1")), None, &["described"]);
+        assert!(!speaks_in_nothing(&stage, &described));
+    }
+
+    /// The app holds the voice of the model on the card. When that is another
+    /// model, or none was read yet, the stage's own voice is unknown, and an
+    /// unknown is not a warning.
+    #[test]
+    fn another_models_voice_says_nothing_about_this_stage() {
+        let stage = block(Some(OPENAI), true, true);
+        let other = voice_state(Some((OPENAI, "tts-2")), None, &["cloned"]);
+        assert!(!speaks_in_nothing(&stage, &other));
+        let unread = voice_state(None, None, &["cloned"]);
+        assert!(!speaks_in_nothing(&stage, &unread));
+        assert!(!speaks_in_nothing(&block(None, false, false), &unread));
+    }
+
+    /// What is already wrong with a stage is said first: a backend not set up,
+    /// a model not running, or nothing loaded.
+    #[test]
+    fn no_voice_only_replaces_ready() {
+        for status in [
+            ModelStatus::None,
+            ModelStatus::Blocked,
+            ModelStatus::NotLoaded,
+            ModelStatus::Failed,
+        ] {
+            assert_eq!(without_voice(status, true), status);
+        }
+        assert_eq!(without_voice(ModelStatus::Ready, false), ModelStatus::Ready);
     }
 }

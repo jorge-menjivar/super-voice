@@ -109,7 +109,7 @@ pub(super) fn voice_warning<'a>(
         return None;
     }
     let block = app.voice.resolution.as_ref()?;
-    if block.effective.is_some() || block.kinds.iter().any(|k| k == "described") {
+    if !block.has_no_voice() {
         return None;
     }
     let detail = voice_warning_text(
