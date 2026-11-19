@@ -32,6 +32,22 @@ impl RecordingStopMode {
         matches!(self, Self::SilenceAndManual | Self::ManualOnly)
     }
 
+    /// The longest a take in this mode runs before the daemon stops it, as if
+    /// stopped by hand.
+    ///
+    /// A ceiling against a take that would otherwise never end: a microphone
+    /// left on, or a room never quiet enough for silence detection. A take the
+    /// user can stop gets room for real dictation: a minute cut
+    /// people off mid-sentence. A take only silence can end keeps the tighter
+    /// minute, since nothing else stops it when the silence never comes.
+    #[must_use]
+    pub const fn take_limit(self) -> std::time::Duration {
+        match self {
+            Self::SilenceAndManual | Self::ManualOnly => std::time::Duration::from_mins(10),
+            Self::SilenceOnly => std::time::Duration::from_mins(1),
+        }
+    }
+
     /// Human-readable label for UI display.
     #[must_use]
     pub fn pretty_name(self) -> &'static str {
@@ -52,6 +68,23 @@ mod tests {
         assert_eq!(
             RecordingStopMode::default(),
             RecordingStopMode::SilenceAndManual
+        );
+    }
+
+    #[test]
+    fn a_take_the_user_can_stop_runs_ten_minutes() {
+        use std::time::Duration;
+        assert_eq!(
+            RecordingStopMode::ManualOnly.take_limit(),
+            Duration::from_mins(10)
+        );
+        assert_eq!(
+            RecordingStopMode::SilenceAndManual.take_limit(),
+            Duration::from_mins(10)
+        );
+        assert_eq!(
+            RecordingStopMode::SilenceOnly.take_limit(),
+            Duration::from_mins(1)
         );
     }
 
