@@ -13,7 +13,7 @@ use cosmic::widget::{self, button, icon, settings, space::horizontal as horizont
 use super_voice_shared::models::recording_stop_mode::RecordingStopMode;
 
 use super::common::{LEVEL_METER_WIDTH, error_banner, muted};
-use super::recording::{LIVE_LINE_CHARS, live_caption, live_tail};
+use super::recording::live_row;
 use crate::core::app::AppModel;
 use crate::notes::{self, Note};
 use crate::state::Stage;
@@ -132,24 +132,6 @@ fn take_section<'a>(app: &'a AppModel, take: &'a NoteTake) -> Element<'a, Messag
     let meter = widget::determinate_linear(level.max(if level > 0.0 { 0.1 } else { 0.0 }))
         .width(Length::Fixed(LEVEL_METER_WIDTH));
 
-    let live = {
-        let content = if take.preview.is_empty() {
-            "\u{2014}".to_string()
-        } else {
-            live_tail(&take.preview, LIVE_LINE_CHARS)
-        };
-        let mut line = row![].spacing(8).align_y(Alignment::Center);
-        if let Some(caption) = take.preview_source.map(live_caption) {
-            line = line.push(text::caption(caption));
-        }
-        line = line.push(
-            text::body(content)
-                .wrapping(cosmic::iced::widget::text::Wrapping::None)
-                .width(Length::Fill),
-        );
-        widget::container(line).width(Length::Fill).clip(true)
-    };
-
     settings::section()
         .add(
             settings::item::builder(label)
@@ -157,7 +139,7 @@ fn take_section<'a>(app: &'a AppModel, take: &'a NoteTake) -> Element<'a, Messag
                 .control(status),
         )
         .add(settings::item(crate::fl!("audio-level"), meter))
-        .add(settings::flex_item(crate::fl!("live"), live))
+        .add(live_row(&take.preview, take.preview_source))
         .into()
 }
 
