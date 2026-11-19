@@ -264,7 +264,7 @@ fn control_row<'a>(
         // utterances, and the one that decides whether a cloning model can
         // speak at all.
         if stage == BlockStage::Synthesis
-            && let Some(voice) = super::voice::voice_dropdown(backend, &model, app)
+            && let Some(voice) = super::voice::voice_dropdown(&backend.source, &model, app)
         {
             rows.push((crate::fl!("voice"), None, voice));
         }
@@ -329,7 +329,7 @@ fn control_row<'a>(
     // card.
     if stage == BlockStage::Synthesis
         && let Some(model) = shown.as_deref()
-        && let Some(voice) = super::voice::voice_dropdown(backend, model, app)
+        && let Some(voice) = super::voice::voice_dropdown(&backend.source, model, app)
     {
         rows.push((crate::fl!("voice"), None, voice));
     }

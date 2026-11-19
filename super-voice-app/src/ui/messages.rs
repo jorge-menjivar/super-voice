@@ -51,6 +51,8 @@ pub enum Message {
     Contexts(ContextsMessage),
     /// The Notes tab: notes the user speaks, kept by the app.
     Notes(NotesMessage),
+    /// The Clips tab: speech the user makes and keeps.
+    Clips(ClipsMessage),
     Language(LanguageMessage),
     Recording(RecordingMessage),
     Update(UpdateMessage),
@@ -1045,6 +1047,57 @@ pub enum NotesMessage {
     SaveBeforeExit,
 }
 
+/// The Clips tab: speech made from text by the daemon, kept, played and
+/// exported by the app.
+#[derive(Debug, Clone)]
+pub enum ClipsMessage {
+    /// Read the folder. Sent whenever the tab is opened.
+    Reload,
+    /// What the folder holds, newest first, or why it could not be read.
+    Loaded(Result<Vec<crate::clips::Clip>, String>),
+
+    /// A keystroke, motion or click in the text of the next clip.
+    DraftEdit(cosmic::widget::text_editor::Action),
+    /// Make a clip of the text.
+    Make,
+    /// The clip was made and kept, or could not be.
+    Made(Result<crate::clips::Clip, String>),
+    /// Stop making the clip.
+    Cancel,
+    /// Time passed while making or playing: the counters move on, and a clip
+    /// that has played to its end is let go.
+    Tick,
+
+    /// Play the clip with this id, stopping any other.
+    Play(String),
+    /// Its audio was read, and can play.
+    Ready {
+        id: String,
+        result: Result<(Vec<f32>, u32), String>,
+    },
+    /// Stop the clip playing.
+    Stop,
+
+    /// Ask where to export the clip with this id, and copy it there.
+    Export(String),
+    /// Where it went, `None` when the dialog was closed.
+    Exported {
+        id: String,
+        result: Result<Option<String>, String>,
+    },
+
+    /// First press of a clip's Delete: asks to confirm.
+    DeleteRequested(String),
+    DeleteCancelled,
+    /// Second press: delete it.
+    DeleteConfirmed(String),
+    /// It was deleted, or could not be.
+    Deleted {
+        id: String,
+        result: Result<(), String>,
+    },
+}
+
 macro_rules! message_from {
     ($($variant:ident => $ty:ident),+ $(,)?) => {
         $(
@@ -1077,6 +1130,7 @@ message_from! {
     Backend => BackendMessage,
     Contexts => ContextsMessage,
     Notes => NotesMessage,
+    Clips => ClipsMessage,
     Language => LanguageMessage,
     Recording => RecordingMessage,
     Update => UpdateMessage,

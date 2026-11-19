@@ -697,3 +697,35 @@ notes-could-not-be-read = The notes could not be read: { $error }
 the-note-could-not-be-saved = The note could not be saved: { $error }
 the-note-could-not-be-deleted = The note could not be deleted: { $error }
 the-note-could-not-be-exported = The note could not be exported: { $error }
+
+# Clips
+clips = Clips
+type-something-and-keep-it-as-speech = Type something, and keep it as spoken audio you can play again or export.
+clips-are-saved-on-this-computer = Clips are saved on this computer, in the app's own folder.
+new-clip = New clip
+what-the-clip-should-say = What the clip should say
+type-what-the-clip-should-say = Type what the clip should say.
+about-seconds = { $seconds ->
+        [one] about { $seconds } second
+       *[other] about { $seconds } seconds
+    }
+make-clip = Make clip
+the-voice-text-to-speech-uses = The voice text to speech uses. Picking another here changes it there too.
+making-the-clip = Making the clip
+clips-count = { $count ->
+        [one] { $count } clip
+       *[other] { $count } clips
+    }
+no-clips-yet = No clips yet.
+each-clip-you-make-shows-here = Each clip you make shows here, newest first, to play again or export.
+playing-position = Playing · { $position } of { $length }
+starting = Starting…
+delete-this-clip = Delete this clip?
+play = Play
+export-clip = Export clip
+wav-audio = WAV audio
+clips-could-not-be-read = The clips could not be read: { $error }
+the-clip-could-not-be-made = The clip could not be made: { $error }
+the-clip-could-not-play = The clip could not play: { $error }
+the-clip-could-not-be-exported = The clip could not be exported: { $error }
+the-clip-could-not-be-deleted = The clip could not be deleted: { $error }

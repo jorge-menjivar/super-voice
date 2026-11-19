@@ -23,6 +23,7 @@ pub(crate) const SETTINGS_SCOPES: &[&str] = &[
     "transcribe",
     "recording_events",
     "speak",
+    "synthesize",
     "voices",
     "playback_events",
     "audio_visualization",

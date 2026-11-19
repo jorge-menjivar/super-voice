@@ -35,6 +35,7 @@ impl AppModel {
             Message::Backend(m) => self.handle_backend_messages(m),
             Message::Contexts(m) => self.handle_contexts_messages(m),
             Message::Notes(m) => self.handle_notes_messages(m),
+            Message::Clips(m) => self.handle_clips_messages(m),
             Message::Language(m) => self.handle_language_messages(m),
             Message::Recording(m) => self.handle_recording_messages(m),
             Message::Update(m) => self.handle_update_messages(m),
