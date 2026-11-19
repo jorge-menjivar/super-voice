@@ -335,6 +335,26 @@ pub(super) fn stage_status(app: &AppModel, stage: crate::state::Stage) -> ModelS
     status
 }
 
+/// Why `stage` cannot be used right now, or `None` when it can: its model is
+/// loaded, or out of memory until its next use, which loads it.
+///
+/// For the pages that start work on a stage, Notes and Clips, which keep their
+/// button off and say this instead of letting a take or a clip fail. Anything
+/// short of ready counts: no backend, one not set up, a model loading, not
+/// loaded or failed, and for synthesis no voice to speak in.
+pub(in crate::ui::views) fn not_ready_reason(
+    app: &AppModel,
+    stage: crate::state::Stage,
+) -> Option<String> {
+    use crate::state::Stage;
+    match (stage_status(app, stage), stage) {
+        (ModelStatus::Ready | ModelStatus::Idle, _) => None,
+        (ModelStatus::NoVoice, _) => Some(crate::fl!("choose-a-voice-on-the-models-page")),
+        (_, Stage::Synthesis) => Some(crate::fl!("text-to-speech-is-not-ready")),
+        (_, _) => Some(crate::fl!("speech-to-text-is-not-ready")),
+    }
+}
+
 /// Whether the synthesis stage's model has nothing to speak in, as far as the
 /// app knows.
 ///

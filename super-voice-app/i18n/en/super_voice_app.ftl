@@ -686,6 +686,7 @@ delete-this-note = Delete this note?
 export = Export…
 adding-to-note = Adding to { $when }
 another-recording-is-running = Another recording is running. Stop it first.
+speech-to-text-is-not-ready = Speech to text isn't ready yet. Check its model on the Models page.
 markdown-or-text = Markdown or text
 export-note = Export note
 today-at = Today, { $time }
@@ -704,6 +705,8 @@ clips-are-saved-on-this-computer = Clips are saved on this computer, in the app'
 new-clip = New clip
 what-the-clip-should-say = What the clip should say
 type-what-the-clip-should-say = Type what the clip should say.
+text-to-speech-is-not-ready = Text to speech isn't ready yet. Check its model on the Models page.
+choose-a-voice-on-the-models-page = Choose a voice on the Models page first.
 about-seconds = { $seconds ->
         [one] about { $seconds } second
        *[other] about { $seconds } seconds

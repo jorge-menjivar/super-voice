@@ -686,6 +686,7 @@ delete-this-note = Supprimer cette note ?
 export = Exporter…
 adding-to-note = Ajout à { $when }
 another-recording-is-running = Un autre enregistrement est en cours. Arrêtez-le d'abord.
+speech-to-text-is-not-ready = La transcription n'est pas encore prête. Vérifiez son modèle sur la page Modèles.
 markdown-or-text = Markdown ou texte
 export-note = Exporter la note
 today-at = Aujourd'hui, { $time }
@@ -704,6 +705,8 @@ clips-are-saved-on-this-computer = Les extraits sont enregistrés sur cet ordina
 new-clip = Nouvel extrait
 what-the-clip-should-say = Ce que l'extrait doit dire
 type-what-the-clip-should-say = Tapez ce que l'extrait doit dire.
+text-to-speech-is-not-ready = La synthèse vocale n'est pas encore prête. Vérifiez son modèle sur la page Modèles.
+choose-a-voice-on-the-models-page = Choisissez d'abord une voix sur la page Modèles.
 about-seconds = { $seconds ->
         [one] environ { $seconds } seconde
        *[other] environ { $seconds } secondes

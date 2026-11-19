@@ -14,6 +14,7 @@ use super::notes::{clock, first_line, when, words_label};
 use crate::clips::Clip;
 use crate::core::app::AppModel;
 use crate::state::ErrorScope;
+use crate::state::Stage;
 use crate::state::clips::ClipsState;
 use crate::ui::messages::{ClipsMessage, Message};
 
@@ -76,7 +77,12 @@ fn new_clip(app: &AppModel) -> Element<'_, Message> {
         .padding([spacing.space_xs, 0]);
 
     let words = crate::notes::words(&draft.text());
-    let estimate = if words == 0 {
+    // Make clip stays off until text to speech can speak, with no voice to
+    // speak in counted as not ready, and the caption says what is missing.
+    let unready = super::models::not_ready_reason(app, Stage::Synthesis);
+    let estimate = if let Some(reason) = unready.clone() {
+        reason
+    } else if words == 0 {
         crate::fl!("type-what-the-clip-should-say")
     } else {
         #[allow(clippy::cast_precision_loss)]
@@ -89,8 +95,9 @@ fn new_clip(app: &AppModel) -> Element<'_, Message> {
             crate::fl!("about-seconds", seconds = seconds)
         )
     };
-    let make = button::suggested(crate::fl!("make-clip"))
-        .on_press_maybe((words > 0).then(|| clips_message(ClipsMessage::Make)));
+    let make = button::suggested(crate::fl!("make-clip")).on_press_maybe(
+        (words > 0 && unready.is_none()).then(|| clips_message(ClipsMessage::Make)),
+    );
     let footer = row![muted(text::caption(estimate)), horizontal_space(), make]
         .align_y(Alignment::Center)
         .width(Length::Fill);
