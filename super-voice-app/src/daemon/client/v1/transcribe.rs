@@ -27,6 +27,11 @@ pub enum RecordEvent {
 /// events on `POST /stt/transcribe`. Closing the returned stream early
 /// signals the daemon to stop the recording.
 ///
+/// Nothing is typed: the transcript comes back here, as the daemon gave it,
+/// empty when nothing was said. Only [`stop_record_command`] or the daemon's
+/// time limit ends the take, never a pause: the Behavior tab's test and a note
+/// on the Notes tab both have a Stop button.
+///
 /// On `invalid_session` from the initial connect (the cached settings
 /// token expired or was revoked), we forget the cache, mint a fresh
 /// token, and retry once — mirroring the behavior of
@@ -90,12 +95,7 @@ pub fn record_command_stream() -> impl futures_util::Stream<Item = RecordEvent> 
                             let _ = channel.send(RecordEvent::Preview { text, source }).await;
                         }
                         TranscribeEvent::Done(text) => {
-                            let result = if text.trim().is_empty() {
-                                "No speech detected".to_string()
-                            } else {
-                                text
-                            };
-                            let _ = channel.send(RecordEvent::Final(Ok(result))).await;
+                            let _ = channel.send(RecordEvent::Final(Ok(text))).await;
                             return Ok(());
                         }
                         TranscribeEvent::Error(msg) => {

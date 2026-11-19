@@ -73,6 +73,14 @@ impl AppModel {
                             source,
                         }))
                     }
+                    // A blank result is a recording of nothing, not a
+                    // failure: the test says so in words rather than leaving
+                    // an empty box.
+                    RecordEvent::Final(Ok(text)) if text.trim().is_empty() => cosmic::Action::App(
+                        Message::Recording(RecordingMessage::TranscriptionReceived(
+                            "No speech detected".to_string(),
+                        )),
+                    ),
                     RecordEvent::Final(Ok(text)) => cosmic::Action::App(Message::Recording(
                         RecordingMessage::TranscriptionReceived(text),
                     )),
