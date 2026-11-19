@@ -901,6 +901,94 @@ async fn a_synthesis_is_not_an_utterance_but_keeps_the_model_in_use() {
     assert!(!engine.is_synthesizing(), "and no longer once done");
 }
 
+/// Progress is reported as soon as the first chunk is heard, while the later
+/// ones are still being synthesized. It used to wait for synthesis to finish,
+/// and the applet, which swaps its loading animation for the visualizer on the
+/// first `spoken_ms > 0`, kept the animation up over most of a minute of a long
+/// read-aloud.
+#[tokio::test]
+async fn progress_is_reported_while_later_chunks_are_still_synthesizing() {
+    use crate::tts::audio::playback::State;
+    use crate::tts::daemon::events::{EventBus, Topic};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, _library) = engine(dir.path());
+    let bus = Arc::new(EventBus::new());
+    let mut rx = bus.subscribe(Topic::SpeechProgress);
+    let engine = Arc::new(engine.with_events(Arc::clone(&bus)));
+    // One permit: the first chunk goes through, the second waits at the gate.
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    let log = Arc::new(ToneLog {
+        gate: Some(Arc::clone(&gate)),
+        ..ToneLog::default()
+    });
+    let model = tone_model("tone", Arc::clone(&log), false).await;
+
+    // Two paragraphs, two chunks: a paragraph break ends a chunk whatever its
+    // length. The first is long enough to fill the ring's prebuffer, which a
+    // chunk cut at the usual opening target is not, and nothing is heard
+    // before the prebuffer fills.
+    let first = "This sentence pads the first paragraph out to a long first chunk. ".repeat(5);
+    let first = first.trim_end();
+    let second = "The second paragraph waits at the gate.";
+    let text = format!("{first}\n\n{second}");
+    let speaking = tokio::spawn({
+        let engine = Arc::clone(&engine);
+        let model = Arc::clone(&model);
+        async move { engine.speak(&model, &text, None, None).await }
+    });
+
+    for _ in 0..1000 {
+        if log.texts.lock().unwrap().len() >= 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    assert_eq!(
+        log.texts.lock().unwrap().clone(),
+        [first, second],
+        "each paragraph is a chunk, and the second is held"
+    );
+
+    // Play some of the first chunk, as the device would.
+    let playback = engine
+        .playback_handle()
+        .await
+        .expect("the engine opened a pipeline");
+    for _ in 0..1000 {
+        if playback.state() == State::Playing {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    assert_eq!(playback.state(), State::Playing, "the first chunk plays");
+    let mut buf = vec![0.0_f32; 240];
+    playback.render(&mut buf);
+
+    let spoken = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let (_, json) = rx.recv_json().await.expect("a progress event");
+            let spoken = json["spoken_ms"].as_u64().expect("spoken_ms");
+            if spoken > 0 {
+                return spoken;
+            }
+        }
+    })
+    .await
+    .expect("progress with spoken_ms > 0 while the second chunk is held");
+    assert_eq!(spoken, 10, "240 samples at 24 kHz");
+    assert!(
+        !speaking.is_finished(),
+        "the second chunk is still being synthesized"
+    );
+
+    gate.add_permits(16);
+    speaking
+        .await
+        .unwrap()
+        .expect("the utterance completes once the gate opens");
+}
+
 /// Text that cannot be spoken is refused before the backend hears of it.
 #[tokio::test]
 async fn a_synthesis_of_nothing_is_refused_before_the_backend() {
