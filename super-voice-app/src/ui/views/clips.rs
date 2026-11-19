@@ -14,6 +14,7 @@ use super::notes::{clock, first_line, when, words_label};
 use crate::clips::Clip;
 use crate::core::app::AppModel;
 use crate::state::ErrorScope;
+use crate::state::Stage;
 use crate::state::clips::ClipsState;
 use crate::ui::messages::{ClipsMessage, Message};
 
@@ -60,8 +61,9 @@ fn intro<'a>() -> Element<'a, Message> {
     .into()
 }
 
-/// The card the next clip is typed into: its text, the voice it will be in,
-/// and Make clip.
+/// The card the next clip is typed into: its text and Make clip. The voice is
+/// not here: it and the model are chosen in one place, the Models page, and
+/// each saved clip says which voice it was made in.
 fn new_clip(app: &AppModel) -> Element<'_, Message> {
     let spacing = cosmic::theme::spacing();
     let draft = &app.clips.draft;
@@ -75,7 +77,12 @@ fn new_clip(app: &AppModel) -> Element<'_, Message> {
         .padding([spacing.space_xs, 0]);
 
     let words = crate::notes::words(&draft.text());
-    let estimate = if words == 0 {
+    // Make clip stays off until text to speech can speak, with no voice to
+    // speak in counted as not ready, and the caption says what is missing.
+    let unready = super::models::not_ready_reason(app, Stage::Synthesis);
+    let estimate = if let Some(reason) = unready.clone() {
+        reason
+    } else if words == 0 {
         crate::fl!("type-what-the-clip-should-say")
     } else {
         #[allow(clippy::cast_precision_loss)]
@@ -88,38 +95,14 @@ fn new_clip(app: &AppModel) -> Element<'_, Message> {
             crate::fl!("about-seconds", seconds = seconds)
         )
     };
-    let make = button::suggested(crate::fl!("make-clip"))
-        .on_press_maybe((words > 0).then(|| clips_message(ClipsMessage::Make)));
+    let make = button::suggested(crate::fl!("make-clip")).on_press_maybe(
+        (words > 0 && unready.is_none()).then(|| clips_message(ClipsMessage::Make)),
+    );
     let footer = row![muted(text::caption(estimate)), horizontal_space(), make]
         .align_y(Alignment::Center)
         .width(Length::Fill);
 
-    settings::section()
-        .add(what)
-        .add(
-            settings::item::builder(crate::fl!("voice"))
-                .description(crate::fl!("the-voice-text-to-speech-uses"))
-                .control(voice_control(app)),
-        )
-        .add(footer)
-        .into()
-}
-
-/// The voice text to speech uses, to pick from; its name alone when there is
-/// nothing to pick; a dash when no model is chosen.
-fn voice_control(app: &AppModel) -> Element<'_, Message> {
-    let (Some(source), Some(model)) = (&app.synthesis.source, &app.synthesis.model) else {
-        return text::body("\u{2014}").into();
-    };
-    super::models::voice_dropdown(source, model, app).unwrap_or_else(|| {
-        let effective = app
-            .voice
-            .resolution
-            .as_ref()
-            .and_then(|r| r.effective.clone())
-            .unwrap_or_else(|| "\u{2014}".to_string());
-        text::body(effective).into()
-    })
+    settings::section().add(what).add(footer).into()
 }
 
 /// The card while a clip is made: how long it has taken, Cancel, and a bar

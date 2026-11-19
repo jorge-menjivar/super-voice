@@ -96,9 +96,9 @@ preopened filesystem; otherwise it sees nothing of the backend directory.
 
 A component is instantiated afresh for every request, so nothing it holds in
 memory survives to the next one. A backend that has to keep something from one
-request to another keeps it on disk instead. The reference clip of a
+request to another keeps it on disk instead. The reference recording of a
 [cloned voice](./contract.md#post-v1voices) is one such thing, for an API that
-takes the clip with every synthesis: the daemon hands it over once, and every
+takes the recording with every synthesis: the daemon hands it over once, and every
 synthesis in that voice needs it.
 
 A component that imports `wasi:filesystem` sees one directory, at `/tmp`:
@@ -245,7 +245,7 @@ resource. A guest must still call `recv` to take it.
   parse is the whole decode.
 - For a cloud backend, report `state: "ready"` from `GET /v1/status` as soon
   as the component is instantiated — there are no weights to load.
-- Keep what must outlive a request, such as a cloned voice's reference clip,
+- Keep what must outlive a request, such as a cloned voice's reference recording,
   in the [private `/tmp`](#private-tmp). Nothing held in memory survives to the
   next request.
 - For a realtime backend: declare `[capabilities] websocket = true` and

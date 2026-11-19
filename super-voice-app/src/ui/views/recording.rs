@@ -140,7 +140,7 @@ pub(super) fn sounds_section<'a>(
 
 /// How much of the live preview to keep on screen. Sized to fill the row
 /// without wrapping at the default window width.
-pub(super) const LIVE_LINE_CHARS: usize = 90;
+const LIVE_LINE_CHARS: usize = 90;
 
 /// Height of the transcript box. Three lines of body text, so a short test
 /// transcript reads without scrolling and a long one still has a fixed size.
@@ -149,7 +149,7 @@ const TRANSCRIPT_HEIGHT: f32 = 66.0;
 /// The last `max_chars` characters of `text`, prefixed with an ellipsis when
 /// something was dropped. Counts chars, not bytes — a multibyte transcript must
 /// not be sliced mid-character.
-pub(super) fn live_tail(text: &str, max_chars: usize) -> String {
+fn live_tail(text: &str, max_chars: usize) -> String {
     let total = text.chars().count();
     if total <= max_chars {
         return text.to_string();
@@ -158,15 +158,42 @@ pub(super) fn live_tail(text: &str, max_chars: usize) -> String {
     format!("\u{2026}{tail}")
 }
 
-/// What the Live line's caption says the text is, for each kind of preview.
+/// What the Live row says the text is, for each kind of preview.
 ///
 /// A window preview restarts every few seconds, which looks like text being
-/// lost unless the line says it only ever shows the last few seconds.
-pub(super) fn live_caption(source: PreviewSource) -> String {
+/// lost unless the row says it only ever shows the last few seconds.
+fn live_caption(source: PreviewSource) -> String {
     match source {
-        PreviewSource::Stream => crate::fl!("so-far"),
-        PreviewSource::Window => crate::fl!("last-few-seconds"),
+        PreviewSource::Stream => crate::fl!("everything-said-so-far"),
+        PreviewSource::Window => crate::fl!("the-last-few-seconds"),
     }
+}
+
+/// The Live row: the newest incremental text, held to one line so the section
+/// doesn't reflow on every update, with what it spans under the row's name.
+///
+/// The tail is the part worth showing either way, but what the text *is*
+/// depends on the model: a stream preview is the whole take so far, a window
+/// preview only the last few seconds. That goes in the row's description,
+/// not beside the words, where it read as the first words of the transcript.
+pub(super) fn live_row(preview: &str, source: Option<PreviewSource>) -> Element<'_, Message> {
+    let content = if preview.is_empty() {
+        "\u{2014}".to_string()
+    } else {
+        live_tail(preview, LIVE_LINE_CHARS)
+    };
+    let line = widget::container(
+        text::body(content)
+            .wrapping(cosmic::iced::widget::text::Wrapping::None)
+            .width(Length::Fill),
+    )
+    .width(Length::Fill)
+    .clip(true);
+    let mut item = settings::item::builder(crate::fl!("live"));
+    if let Some(caption) = source.map(live_caption) {
+        item = item.description(caption);
+    }
+    item.flex_control(line).into()
 }
 
 /// The recording test's rows, for the Behavior tab's one Test section: the
@@ -207,29 +234,6 @@ pub(super) fn test_rows<'a>(
         widget::determinate_linear(audio_level.max(if audio_level > 0.0 { 0.1 } else { 0.0 }))
             .width(Length::Fixed(super::common::LEVEL_METER_WIDTH));
 
-    // One line that keeps changing: the newest incremental text, held to a
-    // single row so the section doesn't reflow on every update. The tail is
-    // the part worth showing either way, but what the text *is* depends on
-    // the model — a stream preview is the whole take so far, a window preview
-    // only the last few seconds — so the daemon's `source` becomes a caption.
-    let live_widget = {
-        let content = if preview_text.is_empty() {
-            "\u{2014}".to_string()
-        } else {
-            live_tail(preview_text, LIVE_LINE_CHARS)
-        };
-        let mut line = row![].spacing(8).align_y(Alignment::Center);
-        if let Some(caption) = preview_source.map(live_caption) {
-            line = line.push(text::caption(caption));
-        }
-        line = line.push(
-            text::body(content)
-                .wrapping(cosmic::iced::widget::text::Wrapping::None)
-                .width(Length::Fill),
-        );
-        widget::container(line).width(Length::Fill).clip(true)
-    };
-
     // The transcript has no label, so it goes into the section as a plain list
     // item. Routing it through `flex_item("", ...)` instead gave the empty
     // label a flex slot of its own, which grew the row and left the text
@@ -249,7 +253,7 @@ pub(super) fn test_rows<'a>(
     vec![
         settings::item(crate::fl!("status"), status_widget).into(),
         settings::item(crate::fl!("audio-level"), audio_meter).into(),
-        settings::flex_item(crate::fl!("live"), live_widget).into(),
+        live_row(preview_text, preview_source),
         transcription_widget.into(),
     ]
 }

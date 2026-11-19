@@ -32,6 +32,20 @@ pub struct VoiceResolution {
     pub kinds: Vec<String>,
 }
 
+impl VoiceResolution {
+    /// Whether the model has nothing to speak in: no voice in effect, and no
+    /// free-text description to fall back on.
+    ///
+    /// This is a cloning model before a voice is chosen, and the daemon refuses
+    /// to speak in it. The one rule for both places that say so: the warning
+    /// on the synthesis card, and the stage's dot, which is not green while it
+    /// holds.
+    #[must_use]
+    pub fn has_no_voice(&self) -> bool {
+        self.effective.is_none() && !self.kinds.iter().any(|k| k == "described")
+    }
+}
+
 /// One voice a model can be pinned to, from `.../voice/list`.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 pub struct VoiceChoice {

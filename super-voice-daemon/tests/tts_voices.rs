@@ -256,6 +256,12 @@ async fn refuses_uploads_it_cannot_use() {
     assert_eq!(s, StatusCode::BAD_REQUEST, "{body}");
     assert_eq!(body["error_code"], "unsupported_audio", "{body}");
 
+    // Past the library's 120 s, but well under the 48 MiB upload cap, so the
+    // length is what refuses it.
+    let (s, body) = upload(&sock, "/tts/voice?label=Long", &token, wav(121.0)).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["error_code"], "recording_too_long", "{body}");
+
     let (s, body) = upload(&sock, "/tts/voice", &token, wav(0.5)).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "a voice needs a name: {body}");
     assert_eq!(body["error_code"], "invalid_value", "{body}");

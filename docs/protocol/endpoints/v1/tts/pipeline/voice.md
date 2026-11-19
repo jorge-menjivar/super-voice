@@ -42,7 +42,7 @@ client. Speaking and configuring are separate grants, and an app that can make
 the machine talk does not thereby get a say in which voice it talks in.
 
 `voice` used to be a per-utterance field on `/tts/speak`, and one named there won.
-Two consequences of removing it are worth knowing. Auditioning a clip is now a
+Two consequences of removing it are worth knowing. Auditioning a voice is now a
 selection — the Voices page sets the voice and then speaks, so the preview a user
 hears is the voice they will get everywhere afterwards. And a model with no
 stored voice whose voices are all cloned has no way to be given one per request,

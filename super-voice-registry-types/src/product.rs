@@ -277,13 +277,13 @@ pub struct VoiceModel {
     #[serde(default)]
     pub clone_ref_seconds: Option<f32>,
     /// Text to speech: whether registering a cloned voice requires the
-    /// reference clip's transcript as well as its audio. Default `false`.
+    /// reference recording's transcript as well as its audio. Default `false`.
     ///
     /// In-context cloning conditions on the reference audio *and* the tokens
     /// of what it says, so a backend taking that path cannot build a voice
     /// from audio alone; speaker-embedding cloning needs no transcript and
     /// leaves this unset. The daemon refuses to register a transcript-less
-    /// clip against a model that declares it, which turns a synthesis failure
+    /// recording against a model that declares it, which turns a synthesis failure
     /// on every later request into one refusal at the point the voice is
     /// added. Only meaningful alongside `cloned` in `voice_kinds`.
     #[serde(default)]

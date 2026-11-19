@@ -13,9 +13,10 @@ use cosmic::widget::{self, button, icon, settings, space::horizontal as horizont
 use super_voice_shared::models::recording_stop_mode::RecordingStopMode;
 
 use super::common::{LEVEL_METER_WIDTH, error_banner, muted};
-use super::recording::{LIVE_LINE_CHARS, live_caption, live_tail};
+use super::recording::live_row;
 use crate::core::app::AppModel;
 use crate::notes::{self, Note};
+use crate::state::Stage;
 use crate::state::notes::{NoteTake, NotesState, OpenNote, TakeTarget};
 use crate::state::{ErrorScope, RecordingStatus};
 use crate::ui::messages::{Message, NotesMessage};
@@ -69,10 +70,14 @@ fn recorder<'a>(app: &'a AppModel, take: Option<&'a NoteTake>) -> Element<'a, Me
     // The Behavior tab's test, or the dictation shortcut, holds the
     // microphone; the daemon would refuse a second take.
     let busy = app.recording_status == RecordingStatus::Recording;
+    // A take with no model ready to transcribe it would record and then
+    // fail, so Record stays off until speech to text is ready.
+    let unready = super::models::not_ready_reason(app, Stage::Transcription);
+    let free = !busy && unready.is_none();
     let description = if busy {
         crate::fl!("another-recording-is-running")
     } else {
-        crate::fl!("press-record-and-speak")
+        unready.unwrap_or_else(|| crate::fl!("press-record-and-speak"))
     };
     settings::section()
         .add(
@@ -80,7 +85,7 @@ fn recorder<'a>(app: &'a AppModel, take: Option<&'a NoteTake>) -> Element<'a, Me
                 .description(description)
                 .control(
                     button::suggested(crate::fl!("record"))
-                        .on_press_maybe((!busy).then(|| notes_message(NotesMessage::Record))),
+                        .on_press_maybe(free.then(|| notes_message(NotesMessage::Record))),
                 ),
         )
         .into()
@@ -127,24 +132,6 @@ fn take_section<'a>(app: &'a AppModel, take: &'a NoteTake) -> Element<'a, Messag
     let meter = widget::determinate_linear(level.max(if level > 0.0 { 0.1 } else { 0.0 }))
         .width(Length::Fixed(LEVEL_METER_WIDTH));
 
-    let live = {
-        let content = if take.preview.is_empty() {
-            "\u{2014}".to_string()
-        } else {
-            live_tail(&take.preview, LIVE_LINE_CHARS)
-        };
-        let mut line = row![].spacing(8).align_y(Alignment::Center);
-        if let Some(caption) = take.preview_source.map(live_caption) {
-            line = line.push(text::caption(caption));
-        }
-        line = line.push(
-            text::body(content)
-                .wrapping(cosmic::iced::widget::text::Wrapping::None)
-                .width(Length::Fill),
-        );
-        widget::container(line).width(Length::Fill).clip(true)
-    };
-
     settings::section()
         .add(
             settings::item::builder(label)
@@ -152,7 +139,7 @@ fn take_section<'a>(app: &'a AppModel, take: &'a NoteTake) -> Element<'a, Messag
                 .control(status),
         )
         .add(settings::item(crate::fl!("audio-level"), meter))
-        .add(settings::flex_item(crate::fl!("live"), live))
+        .add(live_row(&take.preview, take.preview_source))
         .into()
 }
 
@@ -269,10 +256,14 @@ fn open_note<'a>(app: &'a AppModel, open: &'a OpenNote) -> Vec<Element<'a, Messa
 
 /// Delete on the left, away from the rest; Export and Dictate more on the
 /// right. Delete asks once more in place, as a context's does. Dictate more
-/// waits while any take holds the microphone.
+/// waits while any take holds the microphone, and until speech to text is
+/// ready, which the row says beside it.
 fn actions(app: &AppModel) -> Element<'_, Message> {
     let state = &app.notes;
-    let free = !state.is_recording() && app.recording_status != RecordingStatus::Recording;
+    let unready = super::models::not_ready_reason(app, Stage::Transcription);
+    let free = !state.is_recording()
+        && app.recording_status != RecordingStatus::Recording
+        && unready.is_none();
     let spacing = cosmic::theme::spacing();
     let delete: Element<'_, Message> = if state.confirming_delete {
         row![
@@ -292,9 +283,14 @@ fn actions(app: &AppModel) -> Element<'_, Message> {
     };
     let dictate = button::suggested(crate::fl!("dictate-more"))
         .on_press_maybe(free.then(|| notes_message(NotesMessage::DictateMore)));
+    let why: Element<'_, Message> = match unready {
+        Some(reason) => muted(text::caption(reason)),
+        None => horizontal_space().into(),
+    };
     row![
         delete,
         horizontal_space(),
+        why,
         button::standard(crate::fl!("export")).on_press(notes_message(NotesMessage::Export)),
         dictate,
     ]

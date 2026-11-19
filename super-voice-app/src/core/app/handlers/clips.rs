@@ -255,7 +255,8 @@ impl AppModel {
     }
 
     /// The voice a clip made now is spoken in, as the user knows it: the
-    /// voice text to speech uses, by its label.
+    /// voice text to speech uses, by its label. Kept with each clip, and shown
+    /// on its row.
     fn clip_voice_label(&self) -> Option<String> {
         let source = self.synthesis.source.as_ref()?;
         let model = self.synthesis.model.as_ref()?;

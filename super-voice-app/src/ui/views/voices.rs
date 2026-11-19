@@ -395,7 +395,7 @@ fn pending_section(state: &VoicesState) -> Element<'_, Message> {
 
     settings::section()
         .title(crate::fl!("new-voice"))
-        .add(settings::item(crate::fl!("sample"), text::body(summary)))
+        .add(settings::item(crate::fl!("recording"), text::body(summary)))
         .add(settings::flex_item(crate::fl!("name"), label_input))
         .add(transcript)
         .add(settings::flex_item("", actions))
@@ -418,7 +418,7 @@ fn library_section(state: &VoicesState) -> Element<'_, Message> {
         return section
             .add(note(
                 crate::fl!("no-voices-yet"),
-                crate::fl!("record-or-import-a-sample").to_string(),
+                crate::fl!("record-a-voice-or-import-a-recording").to_string(),
             ))
             .into();
     }

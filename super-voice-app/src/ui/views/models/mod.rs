@@ -16,11 +16,11 @@ mod surface;
 mod tabs;
 mod uninstall_dialog;
 mod voice;
-pub(crate) use voice::voice_dropdown;
 
 use active::active_backend_card;
 use download::download_split;
 use installed::installed_split;
+pub(super) use status::not_ready_reason;
 use status::{ModelStatus, stage_status};
 use surface::{bordered_scroll_view, muted_text_color, tab_bar_container, toolbar_container};
 use tabs::models_tab_switcher;
@@ -155,12 +155,14 @@ fn feature_pill<'a>(
 }
 
 /// A round dot in `status`'s color: gray for no backend, yellow for nothing
-/// loaded or loading, green for ready or idle, red for setup incomplete or not
-/// running.
+/// loaded or loading, green for ready or idle, red for setup incomplete, not
+/// running, or no voice to speak in.
 fn status_dot<'a>(status: ModelStatus, size: f32) -> Element<'a, Message> {
     let color_fn: fn(&cosmic::Theme) -> cosmic::iced::Color = match status {
         ModelStatus::None => |t| t.cosmic().palette.neutral_5.into(),
-        ModelStatus::Blocked | ModelStatus::Failed => |t| t.cosmic().destructive.base.into(),
+        ModelStatus::Blocked | ModelStatus::Failed | ModelStatus::NoVoice => {
+            |t| t.cosmic().destructive.base.into()
+        }
         ModelStatus::NotLoaded => |t| t.cosmic().warning.base.into(),
         ModelStatus::Ready | ModelStatus::Idle => |t| t.cosmic().success.base.into(),
     };

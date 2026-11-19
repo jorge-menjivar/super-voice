@@ -30,7 +30,7 @@ pub struct VoiceInfo {
     pub voice_id: String,
     /// Display name the user chose.
     pub label: String,
-    /// What the clip says, when it was supplied. Absent otherwise.
+    /// What the recording says, when it was supplied. Absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transcript: Option<String>,
     /// RFC 3339 creation time.
@@ -41,10 +41,10 @@ pub struct VoiceInfo {
     /// allows.
     #[serde(default)]
     pub duration_seconds: f32,
-    /// Sample rate of the stored clip.
+    /// Sample rate of the stored recording.
     #[serde(default)]
     pub sample_rate: u32,
-    /// Channel count of the stored clip.
+    /// Channel count of the stored recording.
     #[serde(default)]
     pub channels: u16,
 }
@@ -53,7 +53,7 @@ pub struct VoiceInfo {
 ///
 /// Carried on the listing because it is what a voices UI needs and nothing
 /// else does: whether to offer cloning at all, how much of a recording will
-/// actually be used, and whether to ask the user what the clip says.
+/// actually be used, and whether to ask the user what the recording says.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct VoiceModelSupport {
@@ -68,7 +68,7 @@ pub struct VoiceModelSupport {
     /// clone.
     #[serde(default)]
     pub clone_ref_seconds: Option<f32>,
-    /// Whether registering a voice with it also requires the clip's
+    /// Whether registering a voice with it also requires the recording's
     /// transcript.
     #[serde(default)]
     pub needs_transcript: bool,

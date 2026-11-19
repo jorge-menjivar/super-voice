@@ -213,9 +213,9 @@ voice** below).
 ### Preparing a cloned voice
 
 Before a model can speak in a `voice:<uuid>`, the daemon hands it the reference
-clip and the backend derives what it needs from it — a speaker embedding, and
-for a clip stored with a transcript the codec codes that make it an in-context
-example. That derivation is GPU work over the whole clip, and on a clip length
+recording and the backend derives what it needs from it — a speaker embedding, and
+for a recording stored with a transcript the codec codes that make it an in-context
+example. That derivation is GPU work over the whole recording, and on a recording length
 the backend has not encoded before it can run for seconds to tens of seconds.
 
 ```
@@ -232,7 +232,7 @@ data: {"status":"voice_prepared","voice":"voice:2f8a2d0e-…","model":"qwen3-tts
 to speak in that voice tries again and reports properly if it still cannot.
 
 **When they fire.** Once per voice per loaded model. [`POST /tts/voice`](./tts/voice.md)
-starts a preparation as soon as a clip is saved, so the cost lands while the
+starts a preparation as soon as a recording is saved, so the cost lands while the
 user is still looking at the library they just added to rather than on their
 first request to speak. A voice that was never prepared that way is prepared by
 the first [`POST /tts/speak`](./tts/speak.md) naming it, which is what holds that request
