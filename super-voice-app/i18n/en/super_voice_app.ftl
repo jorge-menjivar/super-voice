@@ -710,7 +710,7 @@ about-seconds = { $seconds ->
        *[other] about { $seconds } seconds
     }
 make-clip = Make clip
-the-voice-text-to-speech-uses = The voice text to speech uses. Picking another here changes it there too.
+change-the-voice-on-the-models-page = Change the voice, or the model, on the Models page.
 making-the-clip = Making the clip
 clips-count = { $count ->
         [one] { $count } clip

@@ -710,7 +710,7 @@ about-seconds = { $seconds ->
        *[other] environ { $seconds } secondes
     }
 make-clip = Créer l'extrait
-the-voice-text-to-speech-uses = La voix de la synthèse vocale. En choisir une autre ici la change aussi là-bas.
+change-the-voice-on-the-models-page = Changez la voix, ou le modèle, sur la page Modèles.
 making-the-clip = Création de l'extrait
 clips-count = { $count ->
         [one] { $count } extrait

@@ -98,28 +98,24 @@ fn new_clip(app: &AppModel) -> Element<'_, Message> {
         .add(what)
         .add(
             settings::item::builder(crate::fl!("voice"))
-                .description(crate::fl!("the-voice-text-to-speech-uses"))
+                .description(crate::fl!("change-the-voice-on-the-models-page"))
                 .control(voice_control(app)),
         )
         .add(footer)
         .into()
 }
 
-/// The voice text to speech uses, to pick from; its name alone when there is
-/// nothing to pick; a dash when no model is chosen.
+/// The voice the clip will be in, by name; a dash when there is none yet.
+///
+/// Shown, not picked. The voice and the model are chosen in one place, the
+/// Models page, and a second picker here would change both for every other
+/// use of text to speech without the user being there to see it.
 fn voice_control(app: &AppModel) -> Element<'_, Message> {
-    let (Some(source), Some(model)) = (&app.synthesis.source, &app.synthesis.model) else {
-        return text::body("\u{2014}").into();
-    };
-    super::models::voice_dropdown(source, model, app).unwrap_or_else(|| {
-        let effective = app
-            .voice
-            .resolution
-            .as_ref()
-            .and_then(|r| r.effective.clone())
-            .unwrap_or_else(|| "\u{2014}".to_string());
-        text::body(effective).into()
-    })
+    text::body(
+        app.clip_voice_label()
+            .unwrap_or_else(|| "\u{2014}".to_string()),
+    )
+    .into()
 }
 
 /// The card while a clip is made: how long it has taken, Cancel, and a bar

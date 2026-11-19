@@ -16,7 +16,6 @@ mod surface;
 mod tabs;
 mod uninstall_dialog;
 mod voice;
-pub(crate) use voice::voice_dropdown;
 
 use active::active_backend_card;
 use download::download_split;
