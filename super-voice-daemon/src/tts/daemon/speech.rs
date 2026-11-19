@@ -69,13 +69,16 @@ const PLAYOUT_STALL_TIMEOUT: Duration = Duration::from_secs(5);
 /// video frame; it costs one uncontended lock per tick.
 const BAND_TICK: Duration = Duration::from_millis(10);
 
-/// How often the watcher republishes `speech_progress` while audio plays out.
+/// How often `speech_progress` is republished, from the start of an utterance
+/// to the end of its playout.
 ///
 /// `docs/protocol/endpoints/v1/events.md` promises progress "repeatedly, as
-/// audio is rendered", and synthesis-time publishing alone cannot deliver that:
-/// a backend faster than realtime is done producing before the first word is
-/// heard. Four a second is smooth enough for a progress bar and far below what
-/// the SSE stream or the ring's lock would notice.
+/// audio is rendered", and publishing as synthesis goes cannot deliver that.
+/// One-shot text is synthesized in a single `push`, so the first chunk plays
+/// for as long as all the others take to synthesize; and a backend faster than
+/// realtime is done producing before the first word is heard. Four a second is
+/// smooth enough for a progress bar and far below what the SSE stream or the
+/// ring's lock would notice.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
 /// A running or finished utterance.
@@ -814,6 +817,18 @@ impl SpeechEngine {
         if let Some(bus) = &self.events {
             bus.publish_speaking_state(true, Some(id.clone()));
         }
+        // From the start, not from the end of synthesis: the first chunk is
+        // heard while the rest are still being synthesized, and a listener
+        // waiting for `spoken_ms > 0` must not wait for the last of them.
+        let progress = self.events.as_ref().map(|bus| {
+            tokio::spawn({
+                let playback = Arc::clone(&playback);
+                let slot = Arc::clone(&self.current);
+                let bus = Arc::clone(bus);
+                let id = id.clone();
+                async move { report_progress(&playback, &slot, &bus, &id).await }
+            })
+        });
         Ok(SpeakSession {
             slot: Arc::clone(&self.current),
             bus: self.events.clone(),
@@ -833,6 +848,7 @@ impl SpeechEngine {
             }),
             events: events_rx,
             pump: Some(pump),
+            progress,
             playback,
             flag,
             chars: 0,
@@ -989,6 +1005,9 @@ pub struct SpeakSession {
     sink: Option<PlaybackSink>,
     events: mpsc::UnboundedReceiver<SpeechEvent>,
     pump: Option<tokio::task::JoinHandle<()>>,
+    /// The `speech_progress` ticker, running from the start of the utterance.
+    /// `end` hands it to the playout watcher; a cancel or a drop stops it.
+    progress: Option<tokio::task::JoinHandle<()>>,
     playback: Arc<Playback>,
     flag: Arc<AtomicBool>,
     chars: usize,
@@ -1132,6 +1151,7 @@ impl SpeakSession {
         }
 
         if self.is_cancelled() {
+            self.stop_progress();
             self.publish_progress();
             self.finish_now();
         } else {
@@ -1162,29 +1182,35 @@ impl SpeakSession {
     /// utterance — an HTTP handler about to answer, a WebSocket about to send
     /// `done` — drops the session immediately afterwards, and the audio outlives
     /// it. Everything the watcher touches is owned or shared, so nothing here
-    /// borrows the session.
-    fn spawn_playout_watcher(&self) {
+    /// borrows the session. It takes the progress ticker along, since the
+    /// position keeps moving until the last sample is heard.
+    fn spawn_playout_watcher(&mut self) {
         let playback = Arc::clone(&self.playback);
         let slot = Arc::clone(&self.slot);
         let bus = self.bus.clone();
         let id = self.id.clone();
+        let progress = self.progress.take();
         tokio::spawn(async move {
-            let progress = tokio::spawn({
-                let playback = Arc::clone(&playback);
-                let slot = Arc::clone(&slot);
-                let bus = bus.clone();
-                let id = id.clone();
-                async move { report_progress(&playback, &slot, bus.as_ref(), &id).await }
-            });
             if !playback.wait_for_playout(PLAYOUT_STALL_TIMEOUT).await {
                 warn!(
                     "utterance {id}: output device stopped consuming with audio queued; \
                      reporting it finished"
                 );
             }
-            progress.abort();
+            if let Some(progress) = progress {
+                progress.abort();
+            }
             finish_utterance(&slot, bus.as_ref(), &id);
         });
+    }
+
+    /// Stop the progress ticker. Before the stop is announced: a tick after
+    /// `speaking_state: false` would report a position in an utterance that is
+    /// over.
+    fn stop_progress(&mut self) {
+        if let Some(progress) = self.progress.take() {
+            progress.abort();
+        }
     }
 
     /// Abandon the utterance: stop the pump and drop queued audio.
@@ -1200,6 +1226,7 @@ impl SpeakSession {
             pump.abort();
             let _ = pump.await;
         }
+        self.stop_progress();
         self.playback.cancel();
         self.finish_now();
     }
@@ -1332,6 +1359,9 @@ impl Drop for Synthesizing {
 
 impl Drop for SpeakSession {
     fn drop(&mut self) {
+        // Whether or not it finished: an `end` or a `cancel` dropped at one of
+        // its awaits has set `finished` with the ticker still running.
+        self.stop_progress();
         if self.finished {
             return;
         }
@@ -1561,21 +1591,18 @@ async fn publish_bands(
     }
 }
 
-/// Publish `speech_progress` for `id` until the task is dropped.
+/// Publish `speech_progress` for `id` every [`PROGRESS_INTERVAL`] until the
+/// task is aborted or another utterance takes the slot.
 ///
-/// Runs for the length of the playout, which is the only stretch of an
-/// utterance where the position moves on its own: synthesis-time publishing
-/// reports how much has been *queued*, and a backend faster than realtime
-/// queues the whole thing before a word is heard.
+/// Runs from the start of the utterance to the end of its playout: the
+/// position moves whenever audio plays, and audio plays while later chunks are
+/// still being synthesized as much as after the last one is queued.
 async fn report_progress(
     playback: &Playback,
     slot: &CurrentSlot,
-    bus: Option<&Arc<crate::tts::daemon::events::EventBus>>,
+    bus: &Arc<crate::tts::daemon::events::EventBus>,
     id: &str,
 ) {
-    let Some(bus) = bus else {
-        return;
-    };
     let format = playback.format();
     let per_ms = u64::from(format.sample_rate) * u64::from(format.channels.max(1)) / 1000;
     if per_ms == 0 {
