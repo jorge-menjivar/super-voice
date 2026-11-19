@@ -140,7 +140,7 @@ pub(super) fn sounds_section<'a>(
 
 /// How much of the live preview to keep on screen. Sized to fill the row
 /// without wrapping at the default window width.
-const LIVE_LINE_CHARS: usize = 90;
+pub(super) const LIVE_LINE_CHARS: usize = 90;
 
 /// Height of the transcript box. Three lines of body text, so a short test
 /// transcript reads without scrolling and a long one still has a fixed size.
@@ -149,7 +149,7 @@ const TRANSCRIPT_HEIGHT: f32 = 66.0;
 /// The last `max_chars` characters of `text`, prefixed with an ellipsis when
 /// something was dropped. Counts chars, not bytes — a multibyte transcript must
 /// not be sliced mid-character.
-fn live_tail(text: &str, max_chars: usize) -> String {
+pub(super) fn live_tail(text: &str, max_chars: usize) -> String {
     let total = text.chars().count();
     if total <= max_chars {
         return text.to_string();
@@ -162,7 +162,7 @@ fn live_tail(text: &str, max_chars: usize) -> String {
 ///
 /// A window preview restarts every few seconds, which looks like text being
 /// lost unless the line says it only ever shows the last few seconds.
-fn live_caption(source: PreviewSource) -> String {
+pub(super) fn live_caption(source: PreviewSource) -> String {
     match source {
         PreviewSource::Stream => crate::fl!("so-far"),
         PreviewSource::Window => crate::fl!("last-few-seconds"),

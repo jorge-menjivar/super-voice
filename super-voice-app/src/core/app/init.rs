@@ -105,6 +105,7 @@ impl AppModel {
             core,
             context_page: ContextPage::default(),
             contexts: crate::state::contexts::ContextsState::default(),
+            notes: crate::state::notes::NotesState::default(),
             nav,
             // Initialize Super Voice state using proper socket path
             socket_path: super_voice_shared::validation::get_http_socket_path(),
@@ -145,7 +146,7 @@ impl AppModel {
             post_processor: crate::daemon::client::StageState::default(),
             synthesis: crate::daemon::client::StageState::default(),
             voice: crate::state::VoiceState::default(),
-            speech_to_text_tab: crate::state::Page::Contexts,
+            speech_to_text_tab: crate::state::Page::Notes,
             text_to_speech_tab: crate::state::Page::Voices,
             window_width: 0.0,
             speech: crate::state::SpeechState::default(),

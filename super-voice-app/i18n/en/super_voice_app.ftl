@@ -663,3 +663,37 @@ idle-seconds = { $seconds ->
         [one] { $seconds } second
        *[other] { $seconds } seconds
     }
+
+# Notes
+notes = Notes
+speak-a-note-and-it-is-kept-here = Speak a note and it is kept here. Nothing is typed into other apps.
+notes-are-saved-on-this-computer = Notes are saved on this computer, in the app's own folder.
+new-note = New note
+press-record-and-speak = Press Record and speak. Press Stop when you are done.
+dictate-more = Dictate more
+recording-elapsed = Recording · { $elapsed } of { $limit }
+stopping = Stopping…
+notes-count = { $count ->
+        [one] { $count } note
+       *[other] { $count } notes
+    }
+no-notes-yet = No notes yet.
+each-note-you-record-shows-here = Each note you record shows here, newest first. Open one to read it, edit it or export it.
+all-notes = All notes
+saving = Saving…
+saved = Saved
+exported-to = Exported to { $path }
+delete-this-note = Delete this note?
+export = Export…
+adding-to-note = Adding to { $when }
+another-recording-is-running = Another recording is running. Stop it first.
+markdown-or-text = Markdown or text
+export-note = Export note
+today-at = Today, { $time }
+yesterday-at = Yesterday, { $time }
+no-speech-was-heard = No speech was heard, so nothing was added.
+the-recording-failed = The recording failed: { $error }
+notes-could-not-be-read = The notes could not be read: { $error }
+the-note-could-not-be-saved = The note could not be saved: { $error }
+the-note-could-not-be-deleted = The note could not be deleted: { $error }
+the-note-could-not-be-exported = The note could not be exported: { $error }

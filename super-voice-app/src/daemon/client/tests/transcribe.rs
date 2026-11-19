@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! `v1/transcribe` — the settings page's test-recording panel.
+//! `v1/transcribe` — the Behavior tab's test recording, and the Notes tab's
+//! takes.
 
 use futures_util::StreamExt;
 use serde_json::json;
@@ -99,10 +100,11 @@ async fn previews_stream_before_the_final_transcript() {
     assert_eq!(final_of(&events[2]), Ok("hello world"));
 }
 
-/// An empty transcript is a successful recording of nothing, not a failure —
-/// the panel says so in words rather than leaving the reader with a blank box.
+/// An empty transcript is a successful recording of nothing, not a failure,
+/// and comes back as it is: what to make of it is the caller's. The test
+/// panel says so in words; a note is simply not made.
 #[tokio::test]
-async fn an_empty_transcript_is_reported_as_no_speech() {
+async fn an_empty_transcript_comes_back_as_it_is() {
     let daemon = FakeDaemon::start().await;
     daemon.reply(Reply::raw(
         200,
@@ -112,7 +114,7 @@ async fn an_empty_transcript_is_reported_as_no_speech() {
 
     let events = drain().await;
 
-    assert_eq!(final_of(&events[0]), Ok("No speech detected"));
+    assert_eq!(final_of(&events[0]), Ok("   "));
 }
 
 #[tokio::test]

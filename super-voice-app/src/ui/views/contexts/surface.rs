@@ -61,16 +61,4 @@ pub(super) fn plain_divider<'a>() -> Element<'a, Message> {
     widget::divider::horizontal::default().into()
 }
 
-/// Dim a secondary line so it reads as a caption rather than as body text.
-pub(super) fn muted<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    widget::container(content.into())
-        .class(cosmic::theme::Container::custom(|theme| {
-            let mut color: cosmic::iced::Color = theme.current_container().component.on.into();
-            color.a *= 0.7;
-            cosmic::iced::widget::container::Style {
-                text_color: Some(color),
-                ..Default::default()
-            }
-        }))
-        .into()
-}
+pub(super) use crate::ui::views::common::muted;

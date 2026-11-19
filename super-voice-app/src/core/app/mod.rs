@@ -205,6 +205,9 @@ pub struct AppModel {
     /// what each backend is pointed at.
     pub contexts: crate::state::contexts::ContextsState,
 
+    /// The notes the app keeps, the one open, and a take recording into one.
+    pub notes: crate::state::notes::NotesState,
+
     // Installed-backend catalog and per-backend configuration state.
     /// Backends discovered by the daemon, with the models/secrets/options
     /// each declares. Drives the per-backend sections on the Models page.
@@ -305,6 +308,28 @@ impl cosmic::Application for AppModel {
     /// Initializes the application with any given flags and startup commands.
     fn init(core: cosmic::Core, flags: Self::Flags) -> (Self, Task<cosmic::Action<Self::Message>>) {
         Self::init_model(core, flags)
+    }
+
+    /// The window's close button. Notes not yet written are written first;
+    /// a note still recording is stopped and saved, and the app closes once
+    /// it is.
+    fn on_app_exit(&mut self) -> Option<Self::Message> {
+        if self.notes.is_recording() {
+            return Some(Message::Notes(
+                crate::ui::messages::NotesMessage::FinishBeforeExit,
+            ));
+        }
+        self.write_notes_now(Vec::new(), None);
+        None
+    }
+
+    /// The main window was closed some other way, by the desktop. The app
+    /// exits right after, so the notes not yet written are written now; a
+    /// take still recording cannot be waited for.
+    fn on_close_requested(&self, id: cosmic::iced::window::Id) -> Option<Self::Message> {
+        (self.core.main_window_id() == Some(id)).then_some(Message::Notes(
+            crate::ui::messages::NotesMessage::SaveBeforeExit,
+        ))
     }
 
     /// Elements to pack at the start of the header bar.
@@ -426,6 +451,13 @@ impl cosmic::Application for AppModel {
             cosmic::iced::window::resize_events()
                 .map(|(id, size)| Message::Shell(ShellMessage::WindowWidth(id, size.width))),
         ];
+        // The Notes tab's elapsed time while a note records.
+        if self.notes.is_recording() {
+            subs.push(
+                cosmic::iced::time::every(std::time::Duration::from_secs(1))
+                    .map(|_| Message::Notes(crate::ui::messages::NotesMessage::Tick)),
+            );
+        }
         if self.voices.is_recording() {
             subs.push(
                 cosmic::iced::time::every(std::time::Duration::from_millis(RECORDING_TICK_MS))
@@ -523,13 +555,21 @@ impl AppModel {
         self.core.window.show_context = false;
         self.models_page.installed_menu_open = None;
         self.models_page.browse_menu_open = false;
+        // The open note stays open while the user is elsewhere, but its edits
+        // are saved now rather than half a second later, which may be after
+        // the app has closed.
+        let flush = if page == crate::state::Page::Notes {
+            Task::none()
+        } else {
+            self.save_open_note()
+        };
 
         // Opening a page that draws backend cards refetches both catalogs. The
         // daemon reads `installed_version` off disk on every request, so it is
         // never the stale one — the app was, holding a catalog fetched once at
         // startup. Anything that changed a backend outside this app (an install
         // from the CLI, an edited `backend.toml`) went unseen until a restart.
-        match page {
+        let shown = match page {
             crate::state::Page::Models | crate::state::Page::Library => Task::batch([
                 handlers::tasks::reload_backend_catalogs(),
                 self.update_title(),
@@ -566,8 +606,17 @@ impl AppModel {
                 ))),
                 self.update_title(),
             ]),
+            // The folder is read each time: a note may have been added to it,
+            // or deleted, by hand.
+            crate::state::Page::Notes => Task::batch([
+                Task::done(cosmic::Action::App(Message::Notes(
+                    crate::ui::messages::NotesMessage::Reload,
+                ))),
+                self.update_title(),
+            ]),
             _ => self.update_title(),
-        }
+        };
+        Task::batch([flush, shown])
     }
 }
 

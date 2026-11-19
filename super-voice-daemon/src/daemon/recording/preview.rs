@@ -122,7 +122,7 @@ impl SuperSTTDaemon {
         });
 
         let start_time = Instant::now();
-        let take_limit = super::take_limit(stop_mode);
+        let take_limit = stop_mode.take_limit();
 
         Ok((
             RecordingSession {

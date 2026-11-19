@@ -33,21 +33,6 @@ pub(crate) struct TakeSettings {
 /// `client_id` reported on every daemon-mic lifecycle event.
 const CLIENT_ID: &str = "daemon_recorder";
 
-/// The longest a take records before the daemon stops it.
-///
-/// A ceiling against a take that would otherwise never end: a microphone left
-/// on, or a room never quiet enough for silence detection. A take the user can
-/// stop gets room for real dictation: a minute cut people off mid-sentence. A
-/// take only silence can end keeps the tighter minute, since nothing else
-/// stops it when the silence never comes.
-fn take_limit(stop_mode: RecordingStopMode) -> std::time::Duration {
-    if stop_mode.manual_stop_enabled() {
-        std::time::Duration::from_mins(10)
-    } else {
-        std::time::Duration::from_mins(1)
-    }
-}
-
 /// Outputs from the recorder-spawn phase, consumed by the loop and collect phases.
 struct RecordingSession {
     pub(super) recorder_handle: tokio::task::JoinHandle<Result<Vec<f32>>>,
@@ -77,7 +62,7 @@ struct RecordingSession {
     pub(super) speech_state: Arc<parking_lot::Mutex<crate::audio::state::RecordingState>>,
     pub(super) device_sample_rate: u32,
     pub(super) start_time: Instant,
-    // How long the take may run: see [`take_limit`].
+    // How long the take may run: see [`RecordingStopMode::take_limit`].
     pub(super) take_limit: std::time::Duration,
 }
 
@@ -148,8 +133,9 @@ impl SuperSTTDaemon {
         .await;
     }
 
-    /// Stop the take once it has run past its [`take_limit`], and tell the
-    /// user. Returns whether it did.
+    /// Stop the take once it has run past its limit
+    /// ([`RecordingStopMode::take_limit`]), and tell the user. Returns whether
+    /// it did.
     ///
     /// The user may still be talking when this fires, and nothing they say
     /// from here on is recorded, so they hear of it at once rather than
@@ -619,31 +605,5 @@ impl SuperSTTDaemon {
                 transcription_success,
                 error,
             });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::take_limit;
-    use std::time::Duration;
-    use super_voice_shared::models::recording_stop_mode::RecordingStopMode;
-
-    /// A take the user can stop has room for real dictation; the minute that
-    /// cut people off mid-sentence is left only where nothing but silence
-    /// ends the take.
-    #[test]
-    fn a_take_the_user_can_stop_runs_ten_minutes() {
-        assert_eq!(
-            take_limit(RecordingStopMode::ManualOnly),
-            Duration::from_mins(10)
-        );
-        assert_eq!(
-            take_limit(RecordingStopMode::SilenceAndManual),
-            Duration::from_mins(10)
-        );
-        assert_eq!(
-            take_limit(RecordingStopMode::SilenceOnly),
-            Duration::from_mins(1)
-        );
     }
 }
