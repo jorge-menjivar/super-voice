@@ -35,7 +35,8 @@ or the load failed.
 
 To stream text in as it is generated — an LLM reply spoken as it arrives —
 use [`GET /tts/speak/stream`](./speak/stream.md) instead. This endpoint takes
-complete text.
+complete text. To keep the audio rather than play it, use
+[`POST /tts/synthesize`](./synthesize.md), under its own `synthesize` scope.
 
 ## Auth
 

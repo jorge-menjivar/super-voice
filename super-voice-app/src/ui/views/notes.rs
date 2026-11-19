@@ -306,7 +306,7 @@ fn actions(app: &AppModel) -> Element<'_, Message> {
 
 /// When a note was made: "Today, 09:42", "Yesterday, 18:15", or the date for
 /// anything older.
-fn when(created: NaiveDateTime, today: NaiveDate) -> String {
+pub(super) fn when(created: NaiveDateTime, today: NaiveDate) -> String {
     let time = created.format("%H:%M").to_string();
     let day = created.date();
     if day == today {
@@ -318,7 +318,7 @@ fn when(created: NaiveDateTime, today: NaiveDate) -> String {
     }
 }
 
-fn words_label(words: usize) -> String {
+pub(super) fn words_label(words: usize) -> String {
     if words == 1 {
         crate::fl!("count-1-word")
     } else {
@@ -327,14 +327,14 @@ fn words_label(words: usize) -> String {
 }
 
 /// `elapsed` as minutes and seconds: "0:42", "10:00".
-fn clock(elapsed: Duration) -> String {
+pub(super) fn clock(elapsed: Duration) -> String {
     let seconds = elapsed.as_secs();
     format!("{}:{:02}", seconds / 60, seconds % 60)
 }
 
 /// A note's first line with words on it, cut to `max_chars` with an
 /// ellipsis: at the last whole word, without the punctuation before the cut.
-fn first_line(text: &str, max_chars: usize) -> String {
+pub(super) fn first_line(text: &str, max_chars: usize) -> String {
     let line = text
         .lines()
         .map(str::trim)

@@ -208,6 +208,10 @@ pub struct AppModel {
     /// The notes the app keeps, the one open, and a take recording into one.
     pub notes: crate::state::notes::NotesState,
 
+    /// The speech clips the app keeps, the next one's text, and the one being
+    /// made or played.
+    pub clips: crate::state::clips::ClipsState,
+
     // Installed-backend catalog and per-backend configuration state.
     /// Backends discovered by the daemon, with the models/secrets/options
     /// each declares. Drives the per-backend sections on the Models page.
@@ -451,6 +455,14 @@ impl cosmic::Application for AppModel {
             cosmic::iced::window::resize_events()
                 .map(|(id, size)| Message::Shell(ShellMessage::WindowWidth(id, size.width))),
         ];
+        // The Clips tab's counters while a clip is made or plays, and the end
+        // of one that has played out.
+        if self.clips.making.is_some() || self.clips.playing.is_some() {
+            subs.push(
+                cosmic::iced::time::every(std::time::Duration::from_millis(200))
+                    .map(|_| Message::Clips(crate::ui::messages::ClipsMessage::Tick)),
+            );
+        }
         // The Notes tab's elapsed time while a note records.
         if self.notes.is_recording() {
             subs.push(
@@ -606,6 +618,9 @@ impl AppModel {
                 ))),
                 self.update_title(),
             ]),
+            // Read each time, as the notes are: a clip may have been added or
+            // deleted by hand, and the voice may have been changed elsewhere.
+            crate::state::Page::Clips => Task::batch([self.clips_shown(), self.update_title()]),
             // The folder is read each time: a note may have been added to it,
             // or deleted, by hand.
             crate::state::Page::Notes => Task::batch([

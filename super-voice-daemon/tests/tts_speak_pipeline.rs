@@ -1075,3 +1075,47 @@ async fn speech_progress_is_published_for_the_utterance() {
     assert_eq!(progress["utterance_id"], utterance.id.as_str());
     assert!(progress["queued_ms"].as_u64().is_some());
 }
+
+/// `synthesize_wav` runs the same chunks through the real backend host and
+/// hands every one back as one WAV at the backend's rate, playing nothing.
+#[tokio::test]
+async fn a_synthesis_comes_back_as_a_wav_and_plays_nothing() {
+    let Some(model) = loaded_model_with_limit(40).await else {
+        eprintln!("skipping: mock component not built");
+        return;
+    };
+    let engine = SpeechEngine::detached(DEVICE);
+
+    let text = "First sentence here. Second sentence follows. Third one arrives now.";
+    let wav = engine
+        .synthesize_wav(&model, text, None, None)
+        .await
+        .expect("synthesize");
+
+    let reader = hound::WavReader::new(std::io::Cursor::new(&wav)).expect("a WAV");
+    let spec = reader.spec();
+    assert_eq!(spec.channels, 1);
+    assert_eq!(spec.sample_rate, MOCK_RATE);
+    assert_eq!(spec.bits_per_sample, 16);
+    let samples = reader.len() as usize;
+    assert!(
+        samples > MOCK_SAMPLES && samples % MOCK_SAMPLES == 0,
+        "several chunks of the mock's {MOCK_SAMPLES} samples, end to end: {samples}"
+    );
+    assert!(engine.current().is_none(), "no utterance was started");
+    assert!(
+        engine.playback_handle().await.is_none(),
+        "the output was never opened"
+    );
+}
+
+/// Without a model, a synthesis is the same coded refusal as speech.
+#[tokio::test]
+async fn synthesizing_without_a_model_is_a_coded_refusal() {
+    let engine = SpeechEngine::detached(DEVICE);
+    let err = engine
+        .synthesize_wav(&empty_model(), "Hello.", None, None)
+        .await
+        .expect_err("no model");
+    assert!(matches!(err, SpeakError::NotLoaded), "{err:?}");
+}

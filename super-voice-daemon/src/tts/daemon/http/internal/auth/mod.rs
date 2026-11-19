@@ -23,6 +23,18 @@ pub(crate) async fn require_speak_scope(
     require_scope("speak", auth, headers, request, next).await
 }
 
+/// The `synthesize` scope: speech handed back as a file, for the client to
+/// keep, rather than played. Its own scope, not part of `speak`: making the
+/// machine talk is not taking audio of the user's voice away with you.
+pub(crate) async fn require_synthesize_scope(
+    State(auth): State<Auth>,
+    headers: HeaderMap,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    require_scope("synthesize", auth, headers, request, next).await
+}
+
 /// The `voices` scope: the library of recordings voices are cloned from.
 pub(crate) async fn require_voices_scope(
     State(auth): State<Auth>,

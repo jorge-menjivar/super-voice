@@ -50,7 +50,7 @@ What the protocol gives you:
   your app in a popup, and it is bound to your binary's identity — an app
   cannot widen its own permissions. See [auth.md](./auth.md).
 - **Fine-grained scopes.** Request exactly what you need from `transcribe`,
-  `speak`, `voices`, `status`, `settings`, `secrets`, `recording_events`,
+  `speak`, `synthesize`, `voices`, `status`, `settings`, `secrets`, `recording_events`,
   `playback_events`, `audio_visualization`, `global_transcriptions`,
   `daemon_status`. Each is documented under [scopes/](./scopes/).
 - **Live event streams.** Subscribe over Server-Sent Events
@@ -132,6 +132,7 @@ knowing them means most paths can be guessed rather than looked up:
 | `/v1/tts/speak/read` | `POST` | `speak` | [tts/speak/read.md](./endpoints/v1/tts/speak/read.md) |
 | `/v1/tts/speak/stop` | `POST` | `speak` | [tts/speak/stop.md](./endpoints/v1/tts/speak/stop.md) |
 | `/v1/tts/speak/stream` | `GET` (WebSocket) | `speak` | [tts/speak/stream.md](./endpoints/v1/tts/speak/stream.md) |
+| `/v1/tts/synthesize` | `POST` | `synthesize` | [tts/synthesize.md](./endpoints/v1/tts/synthesize.md) |
 | `/v1/tts/voice/list` | `GET` | `voices` | [tts/voice.md](./endpoints/v1/tts/voice.md#get-ttsvoicelist) |
 | `/v1/tts/voice` | `POST` | `voices` | [tts/voice.md](./endpoints/v1/tts/voice.md#post-ttsvoice) |
 | `/v1/tts/voice/{id}` | `GET`, `PATCH`, `DELETE` | `voices` | [tts/voice.md](./endpoints/v1/tts/voice.md#get-ttsvoiceid) |

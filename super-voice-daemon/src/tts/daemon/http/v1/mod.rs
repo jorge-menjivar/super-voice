@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! `/v1/tts` — text to speech's own routes, one module per path.
 //!
-//! What is text to speech's: speaking ([`speak`], [`speak_stream`]), cloned
+//! What is text to speech's: speaking ([`speak`], [`speak_stream`]), speech
+//! kept as a file ([`synthesize`]), cloned
 //! voices ([`voice`]) and its pipeline ([`pipeline`]). Everything the daemon
 //! has once — auth, events, status, backends, the registry, settings,
 //! updates — is served at `/v1` by `crate::daemon::http::v1`, which merges
@@ -14,10 +15,13 @@ pub(crate) mod backends;
 pub(crate) mod pipeline;
 pub(crate) mod speak;
 pub(crate) mod speak_stream;
+pub(crate) mod synthesize;
 pub(crate) mod voice;
 pub(crate) mod wire;
 
-use crate::tts::daemon::http::internal::auth::{require_speak_scope, require_voices_scope};
+use crate::tts::daemon::http::internal::auth::{
+    require_speak_scope, require_synthesize_scope, require_voices_scope,
+};
 use crate::tts::daemon::http::state::AppState;
 use axum::Router;
 use axum::middleware;
@@ -32,6 +36,10 @@ pub(crate) const TTS: &str = "/tts";
 /// reads the `#[utoipa::path]` attribute off the handler it names.
 struct ScopeGroups {
     speak: OpenApiRouter<AppState>,
+    /// Speech handed back as a file. Its own scope, apart from `speak`: an
+    /// app that may make the machine talk may not thereby take audio of the
+    /// user's voice away.
+    synthesize: OpenApiRouter<AppState>,
     /// The synthesis stage: what model and backend fill it, and how.
     settings: OpenApiRouter<AppState>,
     /// The cloned-voice library. Its own scope rather than part of `settings`:
@@ -45,6 +53,7 @@ struct ScopeGroups {
 fn scope_groups() -> ScopeGroups {
     ScopeGroups {
         speak: speak::routes().merge(speak_stream::routes()),
+        synthesize: synthesize::routes(),
         settings: pipeline::routes(),
         voices: voice::routes(),
     }
@@ -66,6 +75,7 @@ fn guarded(groups: ScopeGroups, state: &AppState) -> ScopeGroups {
 
     ScopeGroups {
         speak: guard!(groups.speak, require_speak_scope),
+        synthesize: guard!(groups.synthesize, require_synthesize_scope),
         settings: guard!(groups.settings, require_settings_scope),
         voices: guard!(groups.voices, require_voices_scope),
     }
@@ -76,6 +86,7 @@ fn guarded(groups: ScopeGroups, state: &AppState) -> ScopeGroups {
 fn assemble(groups: ScopeGroups) -> OpenApiRouter<AppState> {
     let tts = OpenApiRouter::new()
         .merge(groups.speak)
+        .merge(groups.synthesize)
         .merge(groups.settings)
         .merge(groups.voices);
     OpenApiRouter::new().nest(&format!("/v1{TTS}"), tts)
@@ -102,6 +113,7 @@ pub(crate) fn enforced_scopes() -> std::collections::BTreeMap<String, Option<Vec
     let groups = scope_groups();
     let by_group = [
         (groups.speak, Some(vec!["speak"])),
+        (groups.synthesize, Some(vec!["synthesize"])),
         (groups.settings, Some(vec!["settings"])),
         (groups.voices, Some(vec!["voices"])),
     ];

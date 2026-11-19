@@ -79,6 +79,7 @@ curl --unix-socket \"${XDG_RUNTIME_DIR:-$TMPDIR}/voice/super-voice-http.sock\" \
         (name = "health", description = "Liveness and what the daemon is currently running."),
         (name = "transcribe", description = "Start, stop and stream transcription."),
         (name = "speak", description = "Synthesize text, play it, and stop it — including the incremental WebSocket path for text that is still being produced."),
+        (name = "synthesize", description = "Speech kept rather than played: text in, a WAV file of it out, under its own scope."),
         (name = "voices", description = "The cloned-voice library: reference recordings the user owns, and the ids that name them on `POST /v1/tts/speak`."),
         (name = "events", description = "Server-Sent Events for recording and playback state, audio levels, model and download progress, and final transcripts."),
         (name = "pipeline", description = "Each feature's ordered stages, under `/v1/stt/pipeline` and `/v1/tts/pipeline`: which backend fills each, which model runs there, and on what device. Stages are numbered from 1 within each feature."),

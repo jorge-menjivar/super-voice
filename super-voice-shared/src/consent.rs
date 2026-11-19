@@ -38,6 +38,17 @@ pub const SPEAK_PERMISSIONS: &[&str] = &[
     "Interrupt or stop speech this or another app started",
 ];
 
+/// Bullets for the `synthesize` scope.
+///
+/// Phrased around what leaves the daemon: audio of any text the app chooses,
+/// in the user's voice, kept as a file. Cloned voices are named, because a
+/// clip in a voice cloned from a recording of somebody is the part a user
+/// would not guess from "make speech".
+pub const SYNTHESIZE_PERMISSIONS: &[&str] = &[
+    "Make spoken audio of any text, and keep it as a file",
+    "That audio is in your chosen voice, even one cloned from a recording",
+];
+
 /// Bullets for the `status` scope.
 pub const STATUS_PERMISSIONS: &[&str] = &[
     "Read which models and devices are active",
@@ -115,6 +126,7 @@ pub fn permissions_for_scope(scope: &str) -> &'static [&'static str] {
         "daemon_status" => DAEMON_STATUS_PERMISSIONS,
         "secrets" => SECRETS_PERMISSIONS,
         "speak" => SPEAK_PERMISSIONS,
+        "synthesize" => SYNTHESIZE_PERMISSIONS,
         "playback_events" => PLAYBACK_EVENTS_PERMISSIONS,
         "voices" => VOICES_PERMISSIONS,
         _ => UNKNOWN_SCOPE_PERMISSIONS,

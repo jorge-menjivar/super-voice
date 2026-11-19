@@ -23,14 +23,14 @@ use crate::ui::messages::{Message, VoiceMessage};
 /// all described takes free text and has no list, and one that clones before
 /// any clip has been recorded has an empty library. The caller skips the push
 /// rather than rendering an empty control.
-pub(super) fn voice_dropdown<'a>(
-    backend: &'a BackendInfo,
+pub(crate) fn voice_dropdown<'a>(
+    source: &str,
     model: &str,
     app: &'a AppModel,
 ) -> Option<Element<'a, Message>> {
     // Stale-block guard, the same one the language button uses: the two values
     // below describe one model, and a card drawing another must not read them.
-    if app.voice.target.as_ref() != Some(&(backend.source.clone(), model.to_string())) {
+    if app.voice.target.as_ref() != Some(&(source.to_string(), model.to_string())) {
         return None;
     }
     let block = app.voice.resolution.as_ref()?;

@@ -697,3 +697,35 @@ notes-could-not-be-read = Les notes n'ont pas pu être lues : { $error }
 the-note-could-not-be-saved = La note n'a pas pu être enregistrée : { $error }
 the-note-could-not-be-deleted = La note n'a pas pu être supprimée : { $error }
 the-note-could-not-be-exported = La note n'a pas pu être exportée : { $error }
+
+# Clips
+clips = Extraits
+type-something-and-keep-it-as-speech = Tapez un texte et gardez-le en audio parlé, à réécouter ou à exporter.
+clips-are-saved-on-this-computer = Les extraits sont enregistrés sur cet ordinateur, dans le dossier de l'application.
+new-clip = Nouvel extrait
+what-the-clip-should-say = Ce que l'extrait doit dire
+type-what-the-clip-should-say = Tapez ce que l'extrait doit dire.
+about-seconds = { $seconds ->
+        [one] environ { $seconds } seconde
+       *[other] environ { $seconds } secondes
+    }
+make-clip = Créer l'extrait
+the-voice-text-to-speech-uses = La voix de la synthèse vocale. En choisir une autre ici la change aussi là-bas.
+making-the-clip = Création de l'extrait
+clips-count = { $count ->
+        [one] { $count } extrait
+       *[other] { $count } extraits
+    }
+no-clips-yet = Aucun extrait pour l'instant.
+each-clip-you-make-shows-here = Chaque extrait créé apparaît ici, le plus récent en premier, à réécouter ou à exporter.
+playing-position = Lecture · { $position } sur { $length }
+starting = Démarrage…
+delete-this-clip = Supprimer cet extrait ?
+play = Écouter
+export-clip = Exporter l'extrait
+wav-audio = Audio WAV
+clips-could-not-be-read = Les extraits n'ont pas pu être lus : { $error }
+the-clip-could-not-be-made = L'extrait n'a pas pu être créé : { $error }
+the-clip-could-not-play = L'extrait n'a pas pu être lu : { $error }
+the-clip-could-not-be-exported = L'extrait n'a pas pu être exporté : { $error }
+the-clip-could-not-be-deleted = L'extrait n'a pas pu être supprimé : { $error }

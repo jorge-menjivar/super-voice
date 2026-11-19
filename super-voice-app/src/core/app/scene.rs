@@ -139,6 +139,14 @@ const SCENES: &[(&str, Scene)] = &[
         "speech-to-text-behavior",
         Scene::page(Page::SpeechToTextBehavior, Stt::Running),
     ),
+    // Nothing on these depends on speech to text either.
+    (
+        "clips",
+        Scene {
+            stt: None,
+            ..Scene::page(Page::Clips, Stt::Running)
+        },
+    ),
     ("voices", Scene::page(Page::Voices, Stt::Running)),
     // Nothing on these depends on speech to text, so it is left as found.
     (

@@ -16,8 +16,9 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use chrono::NaiveDateTime;
 
-/// How a note's file name spells the time it was made.
-const STAMP: &str = "%Y-%m-%d_%H-%M-%S";
+/// How a note's file name spells the time it was made. Clips are named the
+/// same way.
+pub(crate) const STAMP: &str = "%Y-%m-%d_%H-%M-%S";
 
 /// The extension every note has.
 const EXTENSION: &str = "md";
@@ -321,7 +322,7 @@ fn path_of(dir: &Path, id: &str) -> PathBuf {
 
 /// When the note named `id` was made, read from its name; `None` for a name
 /// the app did not give.
-fn created_from_id(id: &str) -> Option<NaiveDateTime> {
+pub(crate) fn created_from_id(id: &str) -> Option<NaiveDateTime> {
     let stamp = id.get(..19)?;
     let rest = &id[19..];
     let numbered = rest.is_empty()
@@ -336,7 +337,7 @@ fn created_from_id(id: &str) -> Option<NaiveDateTime> {
 
 /// Refuse anything but a plain file name, so an id can never reach outside
 /// the folder.
-fn check_id(id: &str) -> io::Result<()> {
+pub(crate) fn check_id(id: &str) -> io::Result<()> {
     let plain = !id.is_empty()
         && !id.starts_with('.')
         && Path::new(id).file_name().and_then(|n| n.to_str()) == Some(id);

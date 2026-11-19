@@ -103,4 +103,78 @@ pub mod transport {
     ) -> HttpResult<DaemonResponse> {
         delete_json(socket_path, token, path).await
     }
+
+    /// `POST <path>` with a JSON body → the response body's bytes, for a
+    /// route that answers with a file rather than JSON (`POST
+    /// /tts/synthesize`'s WAV). An error status still answers with the JSON
+    /// envelope, and maps as every other call's does.
+    ///
+    /// No header timeout: the answer comes once the work is done, which for
+    /// a long text is as long as the model takes. Dropping the future closes
+    /// the connection, which is how a caller cancels.
+    ///
+    /// The engine's own calls all read JSON, so this one is made here, over
+    /// the same socket and with the same headers.
+    ///
+    /// # Errors
+    /// Returns [`super::HttpError::InvalidSession`] on `401`;
+    /// [`super::HttpError::Other`] on connection, HTTP, or a daemon error.
+    pub async fn post_json_for_bytes(
+        socket_path: PathBuf,
+        token: &str,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> HttpResult<Vec<u8>> {
+        use super::HttpError;
+        use http_body_util::{BodyExt, Full};
+        use hyper::body::Bytes;
+
+        let body = serde_json::to_vec(body)
+            .map_err(|e| HttpError::Other(format!("Failed to encode body: {e}")))?;
+        let request = hyper::Request::builder()
+            .method(hyper::Method::POST)
+            .uri(format!("http://localhost/v1{path}"))
+            .header("host", "localhost")
+            .header("content-type", "application/json")
+            .header("content-length", body.len().to_string())
+            .header("authorization", format!("Bearer {token}"))
+            .body(Full::new(Bytes::from(body)))
+            .map_err(|e| HttpError::Other(format!("Failed to build request: {e}")))?;
+        let stream = tokio::net::UnixStream::connect(&socket_path)
+            .await
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused => {
+                    HttpError::Other(
+                        "Daemon HTTP listener not running. Start the daemon first.".to_string(),
+                    )
+                }
+                _ => HttpError::Other(format!("Connection failed: {e}")),
+            })?;
+        let (mut sender, connection) =
+            hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(stream))
+                .await
+                .map_err(|e| HttpError::Other(format!("HTTP handshake failed: {e}")))?;
+        let driver = tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                log::debug!("http connection ended: {e}");
+            }
+        });
+        let response = sender
+            .send_request(request)
+            .await
+            .map_err(|e| HttpError::Other(format!("Request failed: {e}")))?;
+        let status = response.status();
+        let bytes = response
+            .into_body()
+            .collect()
+            .await
+            .map_err(|e| HttpError::Other(format!("Failed to read response: {e}")))?
+            .to_bytes();
+        driver.abort();
+        if status.is_success() {
+            Ok(bytes.to_vec())
+        } else {
+            Err(error_for_status(status, &bytes))
+        }
+    }
 }

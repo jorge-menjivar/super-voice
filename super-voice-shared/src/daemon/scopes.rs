@@ -48,6 +48,7 @@ mod tests {
                 "settings",
                 "speak",
                 "status",
+                "synthesize",
                 "transcribe",
                 "voices",
             ]

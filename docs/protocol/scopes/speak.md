@@ -24,6 +24,10 @@ newest wins, so an app with this scope can cut off whatever else is being read
 aloud, and can silence it outright with `/tts/speak/stop`. The consent prompt says
 so in those words.
 
+It does not let an app keep what it has made the machine say. Taking speech
+away as a file is [`synthesize`](./synthesize.md), a scope of its own: that
+audio is in the user's chosen voice, cloned or not.
+
 Scopes are composable — request the set you need in a single
 [`POST /auth/request`](../endpoints/v1/auth/request.md); see [auth.md](../auth.md).
 An app that shows the user what it is saying usually wants
