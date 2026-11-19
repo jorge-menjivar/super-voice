@@ -9025,6 +9025,102 @@
         ]
       }
     },
+    "/v1/tts/synthesize": {
+      "post": {
+        "tags": [
+          "synthesize"
+        ],
+        "summary": "Speak a piece of text into a WAV file (scope: synthesize)",
+        "description": "Synthesizes `text` with the loaded model and answers with the audio, for the client to keep: a clip to play again later, or to save. Nothing is played.\n\nThe response body is `audio/wav`, not JSON: mono 16-bit PCM at the rate the model speaks in. Errors answer with the house JSON envelope.\n\nIt is spoken as `POST /speak` would speak it: the same normalizing, the same sentence splitting, the user's voice and language. **`text` is the whole request**, and `voice`, `language`, `speed` and `instructions` are refused as they are there.\n\nIt needs the `synthesize` scope, not `speak`: the audio leaves the daemon, in the user's voice, cloned or not, and making the machine talk does not grant that.\n\nIt is not an utterance. It does not interrupt what is playing, nothing playing interrupts it, and it publishes no `speaking_state`. The answer comes once the whole text is synthesized, which for a long text takes as long as the model needs; a client that hangs up stops it. While it runs, the model counts as in use, so idle unload does not put it to sleep partway.",
+        "operationId": "tts_synthesize",
+        "requestBody": {
+          "description": "`text`, and nothing else, as on `POST /speak`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeakBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The text, spoken: mono 16-bit PCM WAV at the model's rate.",
+            "content": {
+              "audio/wav": {}
+            }
+          },
+          "400": {
+            "description": "`text` missing, empty, or over the cap; a request still carrying the removed `voice`/`language`/`speed`/`instructions` fields; or a malformed body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token unknown, expired, or its binary changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReasonEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the `synthesize` scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No model is loaded (`model_not_loaded`), or the model speaks only in a voice the user chooses and none is chosen (`voice_required`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-client rate limit hit; back off and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The backend failed, produced no audio, or the model changed partway through. `message` carries the reason.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TtsErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session_token": [
+              "synthesize"
+            ]
+          }
+        ]
+      }
+    },
     "/v1/tts/voice": {
       "post": {
         "tags": [
@@ -13425,6 +13521,10 @@
     {
       "name": "speak",
       "description": "Synthesize text, play it, and stop it — including the incremental WebSocket path for text that is still being produced."
+    },
+    {
+      "name": "synthesize",
+      "description": "Speech kept rather than played: text in, a WAV file of it out, under its own scope."
     },
     {
       "name": "voices",
