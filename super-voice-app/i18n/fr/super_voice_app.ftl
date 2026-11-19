@@ -663,3 +663,37 @@ idle-seconds = { $seconds ->
         [one] { $seconds } seconde
        *[other] { $seconds } secondes
     }
+
+# Notes
+notes = Notes
+speak-a-note-and-it-is-kept-here = Dictez une note et elle est gardée ici. Rien n'est tapé dans les autres applications.
+notes-are-saved-on-this-computer = Les notes sont enregistrées sur cet ordinateur, dans le dossier de l'application.
+new-note = Nouvelle note
+press-record-and-speak = Appuyez sur Enregistrer et parlez. Appuyez sur Arrêter quand vous avez fini.
+dictate-more = Dicter la suite
+recording-elapsed = Enregistrement · { $elapsed } sur { $limit }
+stopping = Arrêt…
+notes-count = { $count ->
+        [one] { $count } note
+       *[other] { $count } notes
+    }
+no-notes-yet = Aucune note pour l'instant.
+each-note-you-record-shows-here = Chaque note enregistrée apparaît ici, la plus récente en premier. Ouvrez-en une pour la lire, la modifier ou l'exporter.
+all-notes = Toutes les notes
+saving = Sauvegarde…
+saved = Sauvegardée
+exported-to = Exportée vers { $path }
+delete-this-note = Supprimer cette note ?
+export = Exporter…
+adding-to-note = Ajout à { $when }
+another-recording-is-running = Un autre enregistrement est en cours. Arrêtez-le d'abord.
+markdown-or-text = Markdown ou texte
+export-note = Exporter la note
+today-at = Aujourd'hui, { $time }
+yesterday-at = Hier, { $time }
+no-speech-was-heard = Aucune parole n'a été entendue, rien n'a été ajouté.
+the-recording-failed = L'enregistrement a échoué : { $error }
+notes-could-not-be-read = Les notes n'ont pas pu être lues : { $error }
+the-note-could-not-be-saved = La note n'a pas pu être enregistrée : { $error }
+the-note-could-not-be-deleted = La note n'a pas pu être supprimée : { $error }
+the-note-could-not-be-exported = La note n'a pas pu être exportée : { $error }

@@ -122,6 +122,14 @@ const SCENES: &[(&str, Scene)] = &[
             ..Scene::page(Page::Library, Stt::Running)
         },
     ),
+    // The notes are the app's own, so speech to text is left as found.
+    (
+        "notes",
+        Scene {
+            stt: None,
+            ..Scene::page(Page::Notes, Stt::Running)
+        },
+    ),
     ("contexts", Scene::page(Page::Contexts, Stt::Running)),
     (
         "contexts/edit",

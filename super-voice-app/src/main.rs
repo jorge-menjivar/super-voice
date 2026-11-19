@@ -3,6 +3,7 @@ mod audio;
 mod core;
 mod daemon;
 mod i18n;
+mod notes;
 mod state;
 mod ui;
 

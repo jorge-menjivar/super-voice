@@ -257,6 +257,7 @@ impl AppModel {
             Page::SpeechToTextBehavior => views::behavior::speech_to_text(self),
             Page::Models => views::models::page(self),
             Page::Library => views::models::library_page(self),
+            Page::Notes => views::notes::page(self),
             Page::Contexts => views::contexts::page(self),
             Page::Updates => views::updates::page(&self.update),
             Page::Shortcuts => views::shortcuts::page(

@@ -49,6 +49,8 @@ pub enum Message {
     Backend(BackendMessage),
     /// The Contexts page: the dictation contexts, and which one is in force.
     Contexts(ContextsMessage),
+    /// The Notes tab: notes the user speaks, kept by the app.
+    Notes(NotesMessage),
     Language(LanguageMessage),
     Recording(RecordingMessage),
     Update(UpdateMessage),
@@ -980,6 +982,69 @@ pub enum ContextsMessage {
     },
 }
 
+/// The Notes tab: the notes the app keeps in its own folder, and the takes
+/// that record them through the daemon.
+#[derive(Debug, Clone)]
+pub enum NotesMessage {
+    /// Read the folder. Sent whenever the tab is opened.
+    Reload,
+    /// What the folder holds, newest first, or why it could not be read.
+    Loaded(Result<Vec<crate::notes::Note>, String>),
+
+    /// Record a new note.
+    Record,
+    /// Record more of the open note, to go at its end.
+    DictateMore,
+    /// Stop the take. Its transcript follows.
+    Stop,
+    /// What the take has heard so far.
+    Preview {
+        text: String,
+        source: Option<PreviewSource>,
+    },
+    /// The take's transcript, or why there is none.
+    Transcribed(Result<String, String>),
+    /// A second went by while recording, for the elapsed time.
+    Tick,
+    /// The new note was written, or could not be.
+    Created(Result<crate::notes::Note, String>),
+
+    /// Show a note in place of the list.
+    Open(String),
+    /// Back to the list.
+    Close,
+    /// A keystroke, motion or click in the open note's editor. Carries the
+    /// widget's own action, since the editor owns the cursor.
+    Edit(cosmic::widget::text_editor::Action),
+    /// The edits up to this count have stood still long enough to save.
+    SaveDue(u64),
+    /// A write to the folder finished.
+    Written {
+        job: crate::state::notes::FileJob,
+        result: Result<(), String>,
+    },
+
+    /// Ask where to export the open note, and write it there.
+    Export,
+    /// Where it was written, or `None` when the dialog was closed.
+    Exported(Result<Option<String>, String>),
+
+    /// First press of Delete: asks to confirm.
+    DeleteRequested,
+    DeleteCancelled,
+    /// Second press: delete the open note.
+    DeleteConfirmed,
+
+    /// The window's close button was pressed mid-take: stop the take, save
+    /// its words, then close.
+    FinishBeforeExit,
+    /// Write what is unwritten and close, transcript or not.
+    ExitNow,
+    /// The main window is gone and the app exits right after this: write
+    /// what is unwritten, now.
+    SaveBeforeExit,
+}
+
 macro_rules! message_from {
     ($($variant:ident => $ty:ident),+ $(,)?) => {
         $(
@@ -1011,6 +1076,7 @@ message_from! {
     IdleUnload => IdleUnloadMessage,
     Backend => BackendMessage,
     Contexts => ContextsMessage,
+    Notes => NotesMessage,
     Language => LanguageMessage,
     Recording => RecordingMessage,
     Update => UpdateMessage,

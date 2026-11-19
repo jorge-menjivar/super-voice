@@ -34,6 +34,9 @@ pub enum RecordingStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {
     Customization,
+    /// Notes the user speaks, kept by the app: the list, one open in its
+    /// place, and recording a new one.
+    Notes,
     /// Speech to text's settings, and one section that tests them: when a
     /// recording stops, preview typing, how text is typed.
     SpeechToTextBehavior,
@@ -95,7 +98,7 @@ impl Section {
             Self::Models => &[Page::Models],
             Self::Library => &[Page::Library],
             // Behavior is each feature's last tab: its settings and tests.
-            Self::SpeechToText => &[Page::Contexts, Page::SpeechToTextBehavior],
+            Self::SpeechToText => &[Page::Notes, Page::Contexts, Page::SpeechToTextBehavior],
             Self::TextToSpeech => &[Page::Voices, Page::TextToSpeechBehavior],
             Self::Shortcuts => &[Page::Shortcuts],
             Self::Customization => &[Page::Customization],
@@ -109,7 +112,7 @@ impl Section {
         match page {
             Page::Models => Self::Models,
             Page::Library => Self::Library,
-            Page::Contexts | Page::SpeechToTextBehavior => Self::SpeechToText,
+            Page::Notes | Page::Contexts | Page::SpeechToTextBehavior => Self::SpeechToText,
             Page::Voices | Page::TextToSpeechBehavior => Self::TextToSpeech,
             Page::Shortcuts => Self::Shortcuts,
             Page::Customization => Self::Customization,
@@ -125,6 +128,7 @@ impl Page {
         match self {
             Self::Models => crate::fl!("models"),
             Self::Library => crate::fl!("library"),
+            Self::Notes => crate::fl!("notes"),
             Self::Contexts => crate::fl!("contexts"),
             Self::Voices => crate::fl!("voices"),
             Self::SpeechToTextBehavior | Self::TextToSpeechBehavior => crate::fl!("behavior"),
@@ -206,6 +210,9 @@ pub enum ErrorScope {
     /// *save* is not here — it belongs in the editor that caused it, beside the
     /// field the user has to fix.
     Contexts,
+    /// The Notes tab: a note that could not be read, recorded, saved,
+    /// exported or deleted.
+    Notes,
 }
 
 /// A scope-tagged, transient action failure rendered as an inline banner on the
@@ -278,6 +285,6 @@ mod section_tests {
         }
         // The same pages everywhere: text to speech's Behavior tab leaves out
         // reading aloud where the session has none, rather than a tab going.
-        assert_eq!(seen.len(), 9, "every page is in a section");
+        assert_eq!(seen.len(), 10, "every page is in a section");
     }
 }

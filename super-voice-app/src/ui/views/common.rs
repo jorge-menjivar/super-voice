@@ -31,6 +31,20 @@ pub fn error_banner(message: &str) -> Element<'static, Message> {
     .into()
 }
 
+/// Dim a secondary line so it reads as a caption rather than as body text.
+pub fn muted<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+    widget::container(content.into())
+        .class(cosmic::theme::Container::custom(|theme| {
+            let mut color: cosmic::iced::Color = theme.current_container().component.on.into();
+            color.a *= 0.7;
+            cosmic::iced::widget::container::Style {
+                text_color: Some(color),
+                ..Default::default()
+            }
+        }))
+        .into()
+}
+
 /// Create a page container following cosmic-settings patterns
 pub fn page_container<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     let theme = cosmic::theme::active();

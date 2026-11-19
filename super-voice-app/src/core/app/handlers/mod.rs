@@ -8,6 +8,7 @@ mod download;
 mod language;
 mod model;
 mod models_page;
+mod notes;
 mod recording;
 mod settings;
 mod shell;

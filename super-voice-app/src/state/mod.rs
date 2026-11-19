@@ -8,6 +8,7 @@ pub mod language;
 pub mod model_operations;
 pub mod models;
 pub mod models_page;
+pub mod notes;
 pub mod registry;
 pub mod scripts;
 pub mod shortcuts;
