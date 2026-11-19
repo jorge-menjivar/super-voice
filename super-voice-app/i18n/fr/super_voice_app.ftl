@@ -709,7 +709,6 @@ about-seconds = { $seconds ->
        *[other] environ { $seconds } secondes
     }
 make-clip = Créer l'extrait
-change-the-voice-on-the-models-page = Changez la voix, ou le modèle, sur la page Modèles.
 making-the-clip = Création de l'extrait
 clips-count = { $count ->
         [one] { $count } extrait

@@ -709,7 +709,6 @@ about-seconds = { $seconds ->
        *[other] about { $seconds } seconds
     }
 make-clip = Make clip
-change-the-voice-on-the-models-page = Change the voice, or the model, on the Models page.
 making-the-clip = Making the clip
 clips-count = { $count ->
         [one] { $count } clip

@@ -60,8 +60,9 @@ fn intro<'a>() -> Element<'a, Message> {
     .into()
 }
 
-/// The card the next clip is typed into: its text, the voice it will be in,
-/// and Make clip.
+/// The card the next clip is typed into: its text and Make clip. The voice is
+/// not here: it and the model are chosen in one place, the Models page, and
+/// each saved clip says which voice it was made in.
 fn new_clip(app: &AppModel) -> Element<'_, Message> {
     let spacing = cosmic::theme::spacing();
     let draft = &app.clips.draft;
@@ -94,28 +95,7 @@ fn new_clip(app: &AppModel) -> Element<'_, Message> {
         .align_y(Alignment::Center)
         .width(Length::Fill);
 
-    settings::section()
-        .add(what)
-        .add(
-            settings::item::builder(crate::fl!("voice"))
-                .description(crate::fl!("change-the-voice-on-the-models-page"))
-                .control(voice_control(app)),
-        )
-        .add(footer)
-        .into()
-}
-
-/// The voice the clip will be in, by name; a dash when there is none yet.
-///
-/// Shown, not picked. The voice and the model are chosen in one place, the
-/// Models page, and a second picker here would change both for every other
-/// use of text to speech without the user being there to see it.
-fn voice_control(app: &AppModel) -> Element<'_, Message> {
-    text::body(
-        app.clip_voice_label()
-            .unwrap_or_else(|| "\u{2014}".to_string()),
-    )
-    .into()
+    settings::section().add(what).add(footer).into()
 }
 
 /// The card while a clip is made: how long it has taken, Cancel, and a bar
