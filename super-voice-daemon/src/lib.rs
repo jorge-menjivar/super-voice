@@ -23,8 +23,9 @@ pub mod shortcuts;
 pub mod stt_models;
 pub mod tts;
 
-// Re-export the main run function
-pub use daemon_main::run;
+// Re-export the main run function, and the status it exits with when another
+// daemon already serves its socket.
+pub use daemon_main::{EXIT_ALREADY_SERVED, run};
 
 mod daemon_main;
 mod num_cast;

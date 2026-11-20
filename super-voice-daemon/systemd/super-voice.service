@@ -2,7 +2,13 @@
 Description=Super Voice daemon - speech to text and text to speech
 Documentation=https://github.com/jorge-menjivar/super-voice
 After=pipewire.service pulseaudio.service graphical-session.target
-Requires=graphical-session.target
+# Stopped with the desktop session, and started again by the next one (see
+# WantedBy). Never Requires= or Wants= the session target: that target stops
+# itself once no unit needs it, taking every app and portal that is PartOf= it
+# along. A session whose own units no longer held it up (another desktop's
+# session ending under the same user manager) left this unit the only thing
+# holding it, and every stop of the daemon took the desktop's apps down too.
+PartOf=graphical-session.target
 # A panic aborts the daemon and it is started again a second later. Five
 # crashes in a minute is a daemon that cannot start, so systemd stops trying
 # rather than looping.
@@ -11,7 +17,12 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sh -c 'while [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; do sleep 0.1; done'
+# Wait for the desktop's Wayland socket. WAYLAND_DISPLAY is read from the
+# service manager's environment as it is now, not from this process's: started
+# with the user manager, before the compositor has published it, a copy taken
+# at start never sees it. ExecStart, spawned after this exits, gets the
+# manager's environment as it is then.
+ExecStartPre=/bin/sh -c 'until d=$$(systemctl --user show-environment | sed -n "s/^WAYLAND_DISPLAY=//p") && [ -n "$$d" ] && case "$$d" in /*) [ -S "$$d" ] ;; *) [ -S "$${XDG_RUNTIME_DIR}/$$d" ] ;; esac; do sleep 0.2; done'
 # Bare name: systemd resolves it against its fixed search path, so the
 # same unit works for /usr/local/bin (script install) and /usr/bin
 # (distro package) without editing.
@@ -19,6 +30,10 @@ ExecStart=super-voice-daemon
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=1
+# The daemon exits 3 when another daemon already serves its socket (one run
+# outside systemd, for instance). Starting again cannot help until that one
+# exits, so don't.
+RestartPreventExitStatus=3
 TimeoutStartSec=60
 TimeoutStopSec=10
 
@@ -32,4 +47,7 @@ StandardError=journal
 SyslogIdentifier=voice-daemon
 
 [Install]
-WantedBy=default.target
+# default.target starts it on every desktop, including one whose session never
+# starts graphical-session.target; that target starts it again after a logout
+# stopped it (PartOf above).
+WantedBy=default.target graphical-session.target

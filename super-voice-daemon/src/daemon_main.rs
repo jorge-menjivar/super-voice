@@ -12,7 +12,15 @@ use crate::config::DaemonConfig;
 use crate::daemon::types::SuperSTTDaemon;
 use anyhow::Result;
 use log::{error, info, warn};
-use super_engine_daemon::instance::InstanceLock;
+use super_engine_daemon::instance::{AcquireError, InstanceLock};
+
+/// The exit status of a daemon that found its socket already served.
+///
+/// Its own status, so the systemd unit can say not to restart on it
+/// (`RestartPreventExitStatus=`): another daemon holds the socket, one run
+/// outside systemd for instance, and starting again cannot help until that one
+/// exits. A restart loop only runs into the unit's start limit.
+pub const EXIT_ALREADY_SERVED: i32 = 3;
 
 /// Spawn the HTTP listener that serves every external request the daemon
 /// answers, on the socket `instance` locks. Failure to bind is fatal — there's
@@ -69,6 +77,10 @@ pub async fn run() -> Result<()> {
     let socket_path = super_voice_shared::validation::get_http_socket_path();
     let instance = match InstanceLock::acquire(&socket_path) {
         Ok(instance) => instance,
+        Err(e @ AcquireError::AlreadyRunning(_)) => {
+            error!("Not starting: {e}");
+            std::process::exit(EXIT_ALREADY_SERVED);
+        }
         Err(e) => {
             error!("Not starting: {e}");
             return Err(e.into());
@@ -190,3 +202,7 @@ pub async fn run() -> Result<()> {
     info!("Exiting daemon process");
     std::process::exit(0);
 }
+
+#[cfg(test)]
+#[path = "daemon_main_tests.rs"]
+mod tests;

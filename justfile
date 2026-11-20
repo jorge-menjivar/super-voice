@@ -1282,10 +1282,26 @@ install-daemon:
 
     echo "✓ Daemon installed successfully as user service!"
     echo ""
-    # `restart`, not `start`: start is a no-op on an already-running
-    # unit, which would leave a freshly installed binary unused (the old
-    # process keeps running from the deleted inode).
-    systemctl --user restart {{ service_name }}
+    # A daemon run outside systemd (`just run-daemon`, say) holds the socket,
+    # and the service refuses to start beside it. Say so, and leave the start
+    # until it has exited, rather than leave a failed unit to explain itself.
+    service_pid=$(systemctl --user show -p MainPID --value {{ service_name }} 2>/dev/null || echo 0)
+    stray=""
+    for pid in $(pgrep -f '^([^ ]*/)?{{ daemon_bin_name }}( |$)'); do
+        if [ "$pid" != "$service_pid" ]; then
+            stray="$stray $pid"
+        fi
+    done
+    if [ -n "$stray" ]; then
+        echo "⚠️  A Super Voice daemon is running outside systemd (pid$stray), from 'just run-daemon' perhaps."
+        echo "   It holds the socket, so {{ service_name }} cannot start beside it. Stop it, then run:"
+        echo "   systemctl --user restart {{ service_name }}"
+    else
+        # `restart`, not `start`: start is a no-op on an already-running
+        # unit, which would leave a freshly installed binary unused (the old
+        # process keeps running from the deleted inode).
+        systemctl --user restart {{ service_name }}
+    fi
     systemctl --user enable {{ service_name }}
 
 # Install daemon, settings app, and CLI
