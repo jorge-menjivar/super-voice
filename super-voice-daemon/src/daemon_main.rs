@@ -190,3 +190,7 @@ pub async fn run() -> Result<()> {
     info!("Exiting daemon process");
     std::process::exit(0);
 }
+
+#[cfg(test)]
+#[path = "daemon_main_tests.rs"]
+mod tests;
