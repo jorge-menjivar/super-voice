@@ -93,6 +93,16 @@ impl RecordingState {
         matches!(*self.phase(), Phase::Active { stop: None, .. })
     }
 
+    /// Whether a recording is starting or capturing: the microphone is open,
+    /// or about to be. Not once capture has ended and the take is only being
+    /// transcribed.
+    pub(crate) fn is_capturing(&self) -> bool {
+        matches!(
+            *self.phase(),
+            Phase::Starting { .. } | Phase::Active { stop: Some(_), .. }
+        )
+    }
+
     /// Reserve the microphone for a new recording. `None` when one is under
     /// way: one at a time.
     ///
@@ -276,5 +286,22 @@ mod tests {
     #[test]
     fn a_stop_with_no_recording_does_nothing() {
         assert_eq!(RecordingState::default().stop(), Stopped::NothingToStop);
+    }
+
+    /// A recording captures from the moment it is reserved, since the
+    /// microphone is about to open, until capture ends. Its transcription is
+    /// not capturing.
+    #[test]
+    fn a_recording_captures_until_its_capture_ends() {
+        let state = RecordingState::default();
+        assert!(!state.is_capturing(), "nothing is recording");
+        let (claim, _cancelled) = state.reserve().expect("free");
+        assert!(state.is_capturing(), "starting");
+        let _stopped = claim.start().expect("not cancelled");
+        assert!(state.is_capturing(), "holding the microphone");
+        claim.capture_ended();
+        assert!(!state.is_capturing(), "only transcribing");
+        drop(claim);
+        assert!(!state.is_capturing(), "over");
     }
 }

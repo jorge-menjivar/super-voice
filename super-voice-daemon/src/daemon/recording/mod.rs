@@ -229,6 +229,13 @@ impl SuperSTTDaemon {
             );
         };
 
+        // Silence any speech before the microphone opens: dictating over the
+        // voice is asking it to stop, and the take must not hear it. A request
+        // to speak still waiting for its model does not start either.
+        if let Some(id) = self.tts.stop_speaking().await {
+            info!("Stopped utterance {id} for the recording");
+        }
+
         // Wait for recording to complete and return the transcription.
         let outcome = self
             .record_and_transcribe(

@@ -19,6 +19,12 @@ dispatched on the request body:
 To stop an in-flight daemon-mic capture, see
 [`POST /stt/transcribe/stop`](./transcribe/stop.md).
 
+A daemon-mic capture stops any speech before it opens the microphone, as
+[`POST /tts/speak/stop`](./tts/speak/stop.md) would: dictating over the voice asks it
+to stop, and the take must not hear it. While the capture runs, a request to
+speak is refused with `409 recording_in_progress`; once capture ends and the take
+is being transcribed, speech is allowed again.
+
 ## Auth
 
 - **Required scope:** `transcribe`.

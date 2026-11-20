@@ -107,6 +107,7 @@ impl SuperSTTDaemon {
         // handles below.
         let events = Arc::new(EventBus::new());
         let config = Arc::new(tokio::sync::RwLock::new(config));
+        let recording: Arc<crate::daemon::recording::RecordingState> = Arc::default();
         let tts = crate::tts::daemon::types::SuperTTSDaemon::new(
             crate::tts::daemon::types::Shared {
                 config: Arc::clone(&config),
@@ -114,6 +115,7 @@ impl SuperSTTDaemon {
                 secrets: secrets.clone(),
                 resource_manager: Arc::clone(&components.resource_manager),
                 shutdown_tx: components.shutdown_tx.clone(),
+                recording: Arc::clone(&recording),
             },
             &*config.read().await,
         );
@@ -127,7 +129,7 @@ impl SuperSTTDaemon {
             events,
             audio_theme: Arc::new(RwLock::new(audio_theme)),
             volume: Arc::new(RwLock::new(volume)),
-            recording: Arc::default(),
+            recording,
             download_manager: components.download_manager,
             config,
             resource_manager: components.resource_manager,

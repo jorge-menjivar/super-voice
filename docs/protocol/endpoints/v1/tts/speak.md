@@ -31,7 +31,8 @@ before it in the same way.
 When the daemon unloads idle models
 ([`/settings/idle_unload`](../settings/idle_unload.md)), a request that finds the selected model unloaded loads it first
 and answers once it has: `409 model_not_loaded` then means no model is selected,
-or the load failed.
+or the load failed. [`speaking_state`](../events.md) says the utterance started
+before the load, so a widget shows the wait.
 
 To stream text in as it is generated — an LLM reply spoken as it arrives —
 use [`GET /tts/speak/stream`](./speak/stream.md) instead. This endpoint takes
@@ -139,6 +140,7 @@ one-at-a-time — adding an id later would break every client written against it
 | 403  | `scope_denied`      | Token lacks the `speak` scope.                                                              |
 | 409  | `model_not_loaded`  | No model is loaded. Load one via [`POST /tts/pipeline/1/model`](./pipeline/model.md#post-ttspipelinestagemodel) and retry.        |
 | 409  | `voice_required`    | The selected model speaks only in a voice the user chooses — its [`voice_kinds`](../../../backend/config.md#voices) offer no preset and it declares no `default_voice` — and none is chosen. Refused before the model is loaded; succeeds once a voice is set with [`POST /tts/pipeline/{stage}/model/{model}/voice`](./pipeline/voice.md). |
+| 409  | `recording_in_progress` | A recording is capturing, and the microphone would hear the speech. Refused before the model is loaded; succeeds once the capture ends. A recording that starts stops whatever is speaking. |
 | 429  | `rate_limited`      | Too many requests; back off.                                                                |
 | 500  | —                   | The backend failed, or the output device could not be opened. `message` carries the reason.  |
 

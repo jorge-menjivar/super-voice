@@ -151,12 +151,23 @@ For one utterance the events fire in this order:
 `speaking_state{is_speaking:true}` → `speech_progress` … (repeatedly, as audio
 is rendered) → `speaking_state{is_speaking:false}`.
 
+**When the start fires.** `speaking_state{is_speaking:true}` goes out when the
+daemon accepts a request to speak ([`POST /tts/speak`](./tts/speak.md),
+[`/tts/speak/read`](./tts/speak/read.md), [`/tts/speak/stream`](./tts/speak/stream.md)),
+before it loads the model or gives the backend a cloned voice, under the
+`utterance_id` the utterance then speaks with. After an idle unload that wait is
+seconds, and a widget has something to show for it. It fires once per
+utterance. A request that ends before it speaks (the load failed, a stop, a
+newer request, its client gone) gets `speaking_state{is_speaking:false}`,
+unless another utterance is speaking or waiting: the state is the device's, and
+a stop then would read as the other one ending.
+
 **What the timings mean.** `spoken_ms` and `queued_ms` are positions within the
 utterance derived from the output device's format, not wall-clock time, so they
 stay correct while the stream is idle. `spoken_ms > 0` is the first evidence
 that audio actually reached the device: an utterance is accepted before any
-audio exists for it, and with a remote backend that gap can be seconds long. A
-widget that wants to distinguish "synthesizing" from "speaking" uses exactly
+audio exists for it, and with a remote backend, or a model loading after an idle
+unload, that gap can be seconds long. A widget that wants to distinguish "synthesizing" from "speaking" uses exactly
 that transition.
 
 **When the stop fires.** `speaking_state{is_speaking:false}` marks the end of

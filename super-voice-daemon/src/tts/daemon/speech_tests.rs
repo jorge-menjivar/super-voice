@@ -1049,3 +1049,154 @@ async fn a_synthesis_with_no_audio_is_a_failure() {
         "{err:?}"
     );
 }
+
+// --- Announced before the wait -----------------------------------------------
+
+use crate::tts::daemon::events::{AnyReceiver, EventBus, Topic};
+
+/// Every `speaking_state` published so far, as `(is_speaking, utterance_id)`.
+async fn speaking_states(rx: &mut AnyReceiver) -> Vec<(bool, Option<String>)> {
+    let mut out = Vec::new();
+    while let Ok(Ok((_, json))) =
+        tokio::time::timeout(Duration::from_millis(50), rx.recv_json()).await
+    {
+        out.push((
+            json["is_speaking"].as_bool().expect("is_speaking"),
+            json["utterance_id"].as_str().map(str::to_string),
+        ));
+    }
+    out
+}
+
+/// An engine publishing to a bus, with a receiver for `speaking_state`.
+fn announcing_engine(dir: &std::path::Path) -> (SpeechEngine, AnyReceiver) {
+    let (engine, _library) = engine(dir);
+    let bus = Arc::new(EventBus::new());
+    let rx = bus.subscribe(Topic::SpeakingState);
+    (engine.with_events(bus), rx)
+}
+
+/// Announced on arrival, an utterance still starts once, and speaks under the
+/// id it was announced with.
+#[tokio::test]
+async fn an_announced_utterance_starts_once_under_its_announced_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, mut rx) = announcing_engine(dir.path());
+    let model = tone_model("tone", Arc::new(ToneLog::default()), false).await;
+
+    let ticket = engine.arrival();
+    let announced = engine.announce(ticket);
+    let utterance = engine
+        .speak_with(ticket, &model, "Hello there.", None, None)
+        .await
+        .expect("it speaks");
+    drop(announced);
+
+    assert_eq!(
+        speaking_states(&mut rx).await,
+        [(true, Some(utterance.id))],
+        "one start under the announced id, and no stop while its audio is queued"
+    );
+}
+
+/// A request announced and then given up before it speaks, refused or its
+/// client gone, says it stopped.
+#[tokio::test]
+async fn an_announced_request_that_never_speaks_says_it_stopped() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, mut rx) = announcing_engine(dir.path());
+
+    drop(engine.announce(engine.arrival()));
+
+    let states = speaking_states(&mut rx).await;
+    assert_eq!(states.len(), 2, "{states:?}");
+    assert_eq!((states[0].0, states[1].0), (true, false), "{states:?}");
+    assert_eq!(states[0].1, states[1].1, "the same utterance");
+}
+
+/// While another request is still announced, one given up says nothing: the
+/// stop would drop the other's animation. The last one says it.
+#[tokio::test]
+async fn a_request_given_up_while_another_waits_says_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, mut rx) = announcing_engine(dir.path());
+
+    let first = engine.announce(engine.arrival());
+    let second = engine.announce(engine.arrival());
+    drop(first);
+    let states = speaking_states(&mut rx).await;
+    assert_eq!(
+        states.iter().map(|s| s.0).collect::<Vec<_>>(),
+        [true, true],
+        "no stop while the second waits: {states:?}"
+    );
+
+    drop(second);
+    let states = speaking_states(&mut rx).await;
+    assert_eq!(
+        states.iter().map(|s| s.0).collect::<Vec<_>>(),
+        [false],
+        "{states:?}"
+    );
+}
+
+/// A stop ends the announced requests at once rather than when their wait
+/// does, and they say nothing more when it ends.
+#[tokio::test]
+async fn a_stop_ends_announced_requests_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, mut rx) = announcing_engine(dir.path());
+    let model = tone_model("tone", Arc::new(ToneLog::default()), false).await;
+
+    let ticket = engine.arrival();
+    let announced = engine.announce(ticket);
+    engine.overrule_waiting();
+    let states = speaking_states(&mut rx).await;
+    assert_eq!(
+        states.iter().map(|s| s.0).collect::<Vec<_>>(),
+        [true, false],
+        "{states:?}"
+    );
+
+    let late = engine
+        .speak_with(ticket, &model, "Too late.", None, None)
+        .await;
+    assert!(matches!(late, Err(SpeakError::Superseded)), "{late:?}");
+    drop(announced);
+    assert!(
+        speaking_states(&mut rx).await.is_empty(),
+        "said once already"
+    );
+}
+
+/// An announced request a newer one overtook says no stop: the newer one is
+/// speaking.
+#[tokio::test]
+async fn an_announced_request_overtaken_by_a_newer_one_says_no_stop() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, mut rx) = announcing_engine(dir.path());
+    let model = tone_model("tone", Arc::new(ToneLog::default()), false).await;
+
+    let older = engine.arrival();
+    let announced = engine.announce(older);
+    let newer = engine
+        .speak_with(engine.arrival(), &model, "The newer one.", None, None)
+        .await
+        .expect("the newer one speaks");
+    let overtaken = engine
+        .speak_with(older, &model, "The older one.", None, None)
+        .await;
+    assert!(
+        matches!(overtaken, Err(SpeakError::Superseded)),
+        "{overtaken:?}"
+    );
+    drop(announced);
+
+    let states = speaking_states(&mut rx).await;
+    assert_eq!(
+        states.iter().map(|s| s.0).collect::<Vec<_>>(),
+        [true, true],
+        "{states:?}"
+    );
+    assert_eq!(states[1].1.as_deref(), Some(newer.id.as_str()));
+}

@@ -61,6 +61,15 @@ impl Failure {
         }
     }
 
+    /// A recording was capturing, so nothing was spoken: the microphone would
+    /// have heard it.
+    pub(crate) fn recording_in_progress() -> Self {
+        Self {
+            summary: "Can't speak while recording",
+            body: "The microphone would hear it. Try again when the recording stops.".to_string(),
+        }
+    }
+
     /// The selected model was to be loaded for this utterance, and its load
     /// failed. Not [`Self::no_model_loaded`]: a model is selected, and loading
     /// another would not help.
@@ -196,6 +205,7 @@ mod tests {
     fn every_failure() -> Vec<Failure> {
         vec![
             Failure::no_model_loaded(),
+            Failure::recording_in_progress(),
             Failure::could_not_open_output("d"),
             Failure::synthesis_failed(Origin::Daemon, "d"),
             Failure::synthesis_failed(Origin::Backend, "d"),

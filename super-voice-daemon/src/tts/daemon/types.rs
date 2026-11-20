@@ -133,6 +133,9 @@ pub struct SuperTTSDaemon {
     // The secrets file: the session tokens the daemon has issued and every
     // backend's API keys. One per process, opened at startup; clones share it.
     pub secrets: Secrets,
+    // Speech to text's recording, read so nothing is spoken while it captures:
+    // the microphone would hear it.
+    pub(crate) recording: Arc<crate::daemon::recording::RecordingState>,
 }
 
 /// What text to speech is built with from the daemon: the handles both
@@ -143,6 +146,7 @@ pub struct Shared {
     pub secrets: Secrets,
     pub resource_manager: Arc<ResourceManager>,
     pub shutdown_tx: broadcast::Sender<()>,
+    pub(crate) recording: Arc<crate::daemon::recording::RecordingState>,
 }
 
 /// Put `model` in `slot` on a load turn of its own, as a load would. For
@@ -198,6 +202,7 @@ pub(crate) async fn test_daemon() -> SuperTTSDaemon {
             },
         )),
         // In memory: no daemon test reads or writes the user's secrets file.
+        recording: Arc::default(),
         secrets: Secrets::in_memory(),
     }
 }

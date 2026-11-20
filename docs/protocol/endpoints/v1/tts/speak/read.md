@@ -68,5 +68,6 @@ and the utterance is queued and playing out.
 | 409  | `nothing_to_read`  | Nothing selected, or nothing copied, or only something that is not text      |
 | 409  | `model_not_loaded` | No text to speech model is loaded                                            |
 | 409  | `voice_required`   | The selected model speaks only in a voice the user chooses, and none is chosen |
+| 409  | `recording_in_progress` | A recording is capturing, and the microphone would hear the speech |
 | 429  | —                  | `rate_limited`: too many requests; back off                                  |
 | 500  | `internal`         | The text could not be read (`could_not_read: …`), or speaking failed         |
