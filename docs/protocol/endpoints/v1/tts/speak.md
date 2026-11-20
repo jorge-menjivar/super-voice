@@ -31,7 +31,8 @@ before it in the same way.
 When the daemon unloads idle models
 ([`/settings/idle_unload`](../settings/idle_unload.md)), a request that finds the selected model unloaded loads it first
 and answers once it has: `409 model_not_loaded` then means no model is selected,
-or the load failed.
+or the load failed. [`speaking_state`](../events.md) says the utterance started
+before the load, so a widget shows the wait.
 
 To stream text in as it is generated — an LLM reply spoken as it arrives —
 use [`GET /tts/speak/stream`](./speak/stream.md) instead. This endpoint takes

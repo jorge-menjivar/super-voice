@@ -2551,3 +2551,45 @@ async fn stopping_speech_silences_it_and_what_is_still_waiting() {
         "a request asked for before the stop must not start"
     );
 }
+
+/// A request says it started before its model load, which after an idle
+/// sleep is seconds of nothing on the applet otherwise, and takes it back
+/// when the load fails. One refused before the load says nothing at all.
+#[tokio::test]
+async fn a_request_announces_itself_before_the_load() {
+    use crate::tts::daemon::events::Topic;
+
+    let mut daemon = test_daemon().await;
+    daemon.speech = std::sync::Arc::new(
+        crate::tts::daemon::speech::SpeechEngine::detached(
+            crate::tts::audio::playback::DeviceFormat {
+                sample_rate: 48000,
+                channels: 1,
+            },
+        )
+        .with_events(std::sync::Arc::clone(&daemon.events)),
+    );
+    let mut rx = daemon.events.subscribe(Topic::SpeakingState);
+    let mut states = Vec::new();
+
+    // The test daemon has no model to load, so the load fails.
+    let response = daemon.handle_speak("Hello there.".to_string()).await;
+    assert_eq!(response.error_code, Some(ErrorCode::ModelNotLoaded));
+    while let Ok(Ok((_, json))) =
+        tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv_json()).await
+    {
+        states.push(json["is_speaking"].as_bool().expect("is_speaking"));
+    }
+    assert_eq!(states, [true, false], "announced, then taken back");
+
+    // Refused before the load: nothing was announced.
+    let (_claim, _cancelled) = daemon.recording.reserve().expect("free");
+    let response = daemon.handle_speak("Hello there.".to_string()).await;
+    assert_eq!(response.error_code, Some(ErrorCode::RecordingInProgress));
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv_json())
+            .await
+            .is_err(),
+        "a request refused before the load says nothing"
+    );
+}

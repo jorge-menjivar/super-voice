@@ -316,6 +316,10 @@ pub struct SpeechEngine {
     /// Written only under the [`current`](Self::current) lock, so a check
     /// against it and the slot claim it guards are one step.
     newest_started: AtomicU64,
+    /// Requests announced before they claim the slot, by ticket: the id each
+    /// will speak under. See [`announce`](Self::announce). Locked after
+    /// [`current`](Self::current) wherever both are held.
+    announced: Mutex<std::collections::BTreeMap<u64, String>>,
     /// How many [`synthesize_wav`](Self::synthesize_wav) calls are running.
     /// They use the model without claiming the utterance slot, and the model
     /// must not be put to sleep under them.
@@ -437,6 +441,28 @@ fn publish_voice_status(
     }
 }
 
+/// What [`SpeechEngine::claim`] took the slot with.
+struct Claimed {
+    id: String,
+    flag: Arc<AtomicBool>,
+    /// Whether [`SpeechEngine::announce`] already said it started.
+    announced: bool,
+}
+
+/// A request announced with [`SpeechEngine::announce`]. Dropped before the
+/// request claims the slot, it withdraws the announcement.
+#[must_use = "dropping the announcement withdraws it at once"]
+pub struct Announcement<'a> {
+    engine: &'a SpeechEngine,
+    ticket: u64,
+}
+
+impl Drop for Announcement<'_> {
+    fn drop(&mut self) {
+        self.engine.withdraw(self.ticket);
+    }
+}
+
 /// Releases a [`SpeechEngine::claim_for_test`] claim on drop, so a test cannot
 /// leave the engine looking busy for whatever runs next in the same process.
 #[cfg(test)]
@@ -463,6 +489,7 @@ impl SpeechEngine {
             voices: None,
             arrivals: AtomicU64::new(0),
             newest_started: AtomicU64::new(0),
+            announced: Mutex::default(),
             synthesizing: Arc::default(),
         }
     }
@@ -481,6 +508,7 @@ impl SpeechEngine {
             voices: None,
             arrivals: AtomicU64::new(0),
             newest_started: AtomicU64::new(0),
+            announced: Mutex::default(),
             synthesizing: Arc::default(),
         }
     }
@@ -676,8 +704,62 @@ impl SpeechEngine {
         // request holding the last of those is overruled too; the next one to
         // arrive is newer still and speaks.
         let stop = self.arrival();
-        let _slot = self.current.lock();
-        self.newest_started.fetch_max(stop, Ordering::SeqCst);
+        let withdrawn = {
+            let slot = self.current.lock();
+            self.newest_started.fetch_max(stop, Ordering::SeqCst);
+            // Every request announced so far is one of those overruled, so the
+            // stop ends them now rather than once their wait does. Said here
+            // only with nothing speaking: `cancel` says it for that.
+            let mut announced = self.announced.lock();
+            let last = announced.values().last().cloned();
+            announced.clear();
+            last.filter(|_| slot.is_none())
+        };
+        if let (Some(id), Some(bus)) = (withdrawn, &self.events) {
+            bus.publish_speaking_state(false, Some(id));
+        }
+    }
+
+    /// Say that the request holding `ticket` has started: `speaking_state`
+    /// goes out now, under the id it will speak with, rather than once it
+    /// claims the slot.
+    ///
+    /// For a request about to wait: on its model's load, which after an idle
+    /// sleep is seconds, or on a cloned voice being given to the backend.
+    /// Announced, it has the applet's working animation up for the wait
+    /// instead of nothing at all. The utterance still starts once: the claim
+    /// takes the announced id and does not say it again.
+    ///
+    /// The returned guard withdraws the announcement if the request ends
+    /// without claiming the slot (refused, superseded, its client gone), which
+    /// says the stop, unless something else is speaking or announced.
+    pub fn announce(&self, ticket: u64) -> Announcement<'_> {
+        let id = format!("utt_{}", uuid::Uuid::new_v4());
+        self.announced.lock().insert(ticket, id.clone());
+        if let Some(bus) = &self.events {
+            bus.publish_speaking_state(true, Some(id));
+        }
+        Announcement {
+            engine: self,
+            ticket,
+        }
+    }
+
+    /// End `ticket`'s announcement, if it is still one: the request will not
+    /// speak. The stop goes out only when nothing else is speaking or
+    /// announced, since `speaking_state` is the device's, not the request's,
+    /// and an applet would drop the other one's animation on it.
+    fn withdraw(&self, ticket: u64) {
+        let stop = {
+            let slot = self.current.lock();
+            let mut announced = self.announced.lock();
+            announced
+                .remove(&ticket)
+                .filter(|_| slot.is_none() && announced.is_empty())
+        };
+        if let (Some(id), Some(bus)) = (stop, &self.events) {
+            bus.publish_speaking_state(false, Some(id));
+        }
     }
 
     /// Claim the utterance slot for `ticket`: a new utterance supersedes the
@@ -686,21 +768,31 @@ impl SpeechEngine {
     /// # Errors
     /// [`SpeakError::Superseded`] when a request that arrived after `ticket`
     /// has already started, or a stop came after it.
-    async fn claim(&self, ticket: u64) -> Result<(String, Arc<AtomicBool>), SpeakError> {
+    async fn claim(&self, ticket: u64) -> Result<Claimed, SpeakError> {
         // A new utterance supersedes the old, unless a newer one got there
         // first. The check and the claim are one step under the slot lock: two
         // requests released by the same model load reach this point in any
         // order, and the one that arrived later must win either way.
-        let id = format!("utt_{}", uuid::Uuid::new_v4());
         let flag = Arc::new(AtomicBool::new(false));
-        let displaced = {
+        let (id, announced, displaced) = {
             let mut slot = self.current.lock();
+            let announced = self.announced.lock().remove(&ticket);
             if self.newest_started.load(Ordering::SeqCst) > ticket {
                 debug!("dropped a request to speak that a newer one overtook");
+                // What overtook it is speaking, so an announced one says no
+                // stop here, unless nothing else is speaking or announced.
+                let stop = announced.filter(|_| slot.is_none() && self.announced.lock().is_empty());
+                drop(slot);
+                if let (Some(id), Some(bus)) = (stop, &self.events) {
+                    bus.publish_speaking_state(false, Some(id));
+                }
                 return Err(SpeakError::Superseded);
             }
             self.newest_started.store(ticket, Ordering::SeqCst);
-            slot.replace((id.clone(), Arc::clone(&flag)))
+            let was_announced = announced.is_some();
+            let id = announced.unwrap_or_else(|| format!("utt_{}", uuid::Uuid::new_v4()));
+            let displaced = slot.replace((id.clone(), Arc::clone(&flag)));
+            (id, was_announced, displaced)
         };
         // Flushing after the claim rather than before it: the ring is still
         // empty of this utterance, and whatever claimed the slot before us is
@@ -719,7 +811,45 @@ impl SpeechEngine {
         if let Some(p) = self.playback.lock().await.as_ref() {
             p.cancel();
         }
-        Ok((id, flag))
+        Ok(Claimed {
+            id,
+            flag,
+            announced,
+        })
+    }
+
+    /// The playback for the utterance `id`, which has just claimed the slot.
+    ///
+    /// When the device cannot be opened, the slot is freed and the stop said:
+    /// the utterance will never speak, and an announced one would otherwise
+    /// leave a widget showing its wait for good.
+    async fn playback_for(&self, id: &str) -> Result<Arc<Playback>, SpeakError> {
+        let opened = self.playback().await;
+        if opened.is_err() {
+            finish_utterance(&self.current, self.events.as_ref(), id);
+        }
+        opened
+    }
+
+    /// Start reporting `speech_progress` for the utterance `id`.
+    ///
+    /// From the start, not from the end of synthesis: the first chunk is heard
+    /// while the rest are still being synthesized, and a listener waiting for
+    /// `spoken_ms > 0` must not wait for the last of them.
+    fn spawn_progress(
+        &self,
+        playback: &Arc<Playback>,
+        id: &str,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        self.events.as_ref().map(|bus| {
+            tokio::spawn({
+                let playback = Arc::clone(playback);
+                let slot = Arc::clone(&self.current);
+                let bus = Arc::clone(bus);
+                let id = id.to_string();
+                async move { report_progress(&playback, &slot, &bus, &id).await }
+            })
+        })
     }
 
     /// [`begin`](Self::begin) for a request that took its
@@ -751,9 +881,13 @@ impl SpeechEngine {
             ChunkPolicy::for_model(loaded.definition.product.max_input_chars)
         };
 
-        let (id, flag) = self.claim(ticket).await?;
+        let Claimed {
+            id,
+            flag,
+            announced,
+        } = self.claim(ticket).await?;
 
-        let playback = self.playback().await?;
+        let playback = self.playback_for(&id).await?;
         let (tx, mut rx) = mpsc::unbounded_channel::<PcmMsg>();
 
         // Analysis happens on the producer side and delivery on the listener's,
@@ -826,21 +960,13 @@ impl SpeechEngine {
         });
 
         let (events_tx, events_rx) = mpsc::unbounded_channel::<SpeechEvent>();
-        if let Some(bus) = &self.events {
+        // Said once per utterance: an announced one said it on arrival.
+        if let Some(bus) = &self.events
+            && !announced
+        {
             bus.publish_speaking_state(true, Some(id.clone()));
         }
-        // From the start, not from the end of synthesis: the first chunk is
-        // heard while the rest are still being synthesized, and a listener
-        // waiting for `spoken_ms > 0` must not wait for the last of them.
-        let progress = self.events.as_ref().map(|bus| {
-            tokio::spawn({
-                let playback = Arc::clone(&playback);
-                let slot = Arc::clone(&self.current);
-                let bus = Arc::clone(bus);
-                let id = id.clone();
-                async move { report_progress(&playback, &slot, &bus, &id).await }
-            })
-        });
+        let progress = self.spawn_progress(&playback, &id);
         Ok(SpeakSession {
             slot: Arc::clone(&self.current),
             bus: self.events.clone(),
@@ -1788,6 +1914,10 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         if let Some(model) = self.voice_still_to_choose().await {
             return self.refuse_speech(SpeakError::VoiceRequired(model)).await;
         }
+        // Started, as far as anyone watching is concerned: what follows can
+        // be seconds of loading. Held to the end, so a refusal from here on
+        // takes the announcement back.
+        let _announced = self.speech.announce(ticket);
         // A model is selected and failed to load: the notice says that, not
         // "no model loaded", which would send the user to load one. The answer
         // keeps the code a missing model gets.
@@ -1917,6 +2047,8 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         if let Some(model) = self.voice_still_to_choose().await {
             return Err(SpeakError::VoiceRequired(model));
         }
+        // As `handle_speak` announces it, for the same wait.
+        let _announced = self.speech.announce(ticket);
         // A load that fails is logged; the session reports the missing model.
         let _ = self.stage().ensure_loaded().await;
         let (voice, language) = self.stored_defaults().await;
