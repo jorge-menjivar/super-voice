@@ -30,6 +30,10 @@ ExecStart=super-voice-daemon
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=1
+# The daemon exits 3 when another daemon already serves its socket (one run
+# outside systemd, for instance). Starting again cannot help until that one
+# exits, so don't.
+RestartPreventExitStatus=3
 TimeoutStartSec=60
 TimeoutStopSec=10
 

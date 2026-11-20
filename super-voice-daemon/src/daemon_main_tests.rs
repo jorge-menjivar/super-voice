@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! What the packaged systemd unit promises about starting and stopping.
 
+use super::EXIT_ALREADY_SERVED;
+
 fn unit() -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("systemd/super-voice.service");
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
@@ -43,4 +45,19 @@ fn the_unit_never_holds_up_the_session_target() {
             "WantedBy= should name {target}: {wanted_by}"
         );
     }
+}
+
+/// A daemon that finds its socket served exits with its own status, and the
+/// unit does not restart on it: a restart cannot help while the other daemon
+/// runs, and a loop of them only hits the start limit.
+#[test]
+fn the_unit_does_not_restart_a_refused_start() {
+    let unit = unit();
+    let prevent = values(&unit, "RestartPreventExitStatus").join(" ");
+    assert!(
+        prevent
+            .split_whitespace()
+            .any(|s| s == EXIT_ALREADY_SERVED.to_string()),
+        "RestartPreventExitStatus= should list {EXIT_ALREADY_SERVED}: {prevent:?}"
+    );
 }

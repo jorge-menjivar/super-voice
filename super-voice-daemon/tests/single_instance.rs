@@ -34,9 +34,12 @@ async fn a_second_daemon_on_a_live_socket_exits_and_the_first_keeps_serving() {
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
-    assert!(
-        !status.success(),
-        "a refused start must exit non-zero, got {status:?}"
+    // Its own status, which the systemd unit names in RestartPreventExitStatus=
+    // so a refused start is not retried into the start limit.
+    assert_eq!(
+        status.code(),
+        Some(super_voice_daemon::EXIT_ALREADY_SERVED),
+        "a refused start must exit with its own status, got {status:?}"
     );
 
     // The token was minted by the first daemon, and only it knows it, so a 200
