@@ -30,7 +30,7 @@ Super Voice is speech-to-text and text-to-speech for Linux, with any model you w
 Under the hood it's two things:
 
 - **A model-agnostic engine.** A background daemon installs speech models from a **library** of backends (local or cloud), loads one, and keeps it warm for instant transcription. You pick the model that fits your hardware and swap it whenever you like.
-- **An open protocol.** The daemon speaks a documented HTTP protocol over a local socket, so *any* app, in any language, can request transcriptions, stream live audio visualizations, or drive recording, with per-app consent. Super Voice's own desktop apps, CLI, and COSMIC applet are just the first clients. See [Developers](#-developers).
+- **An open protocol.** The daemon speaks a documented HTTP protocol over a local socket, so *any* app, in any language, can request transcriptions, stream live audio visualizations, or drive recording, with per-app consent. Super Voice's own desktop apps, CLI, COSMIC applet and GNOME Shell extension are just the first clients. See [Developers](#-developers).
 
 ## Features?
 - Speech-to-Text support.
@@ -67,6 +67,13 @@ Press **Super+Space**, speak, and your words are typed into whatever app is focu
 Select text in any app and press **Super+Shift+Space** to hear it read aloud with your text to speech model. Press it again to stop. To read what you copy instead, set **Read from** to **Clipboard** in **Text to speech → Behavior**. Add it from the app's **Shortcuts** page, on COSMIC or on a desktop with the GlobalShortcuts portal, such as KDE Plasma, GNOME or Hyprland. On any other, such as Sway, the page shows the command to bind yourself: `voice speak --read`.
 
 It reads the text through Wayland's data-control protocol, so the compositor must offer it. COSMIC, KDE Plasma and wlroots compositors such as Sway and Hyprland do. GNOME does not.
+
+### See it in the top bar
+
+The installer adds what shows Super Voice at work in your panel: your microphone while you dictate, the speech while it plays, and an animation while it transcribes or prepares speech.
+
+- **COSMIC:** [Super Applet](https://github.com/super-libre/super-cosmic-applet). Add it to a panel in COSMIC Settings.
+- **GNOME:** the [Super Voice extension](https://github.com/super-libre/super-gnome-shell-extension), around the clock. The installer turns it on, and it appears after you log out and back in. The first time, Super Voice asks whether to let GNOME Shell see what it's doing.
 
 ### From the command line
 
