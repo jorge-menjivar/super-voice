@@ -12883,6 +12883,7 @@
           "build_not_installed",
           "nothing_to_read",
           "voice_required",
+          "recording_in_progress",
           "invalid_model",
           "invalid_backend",
           "cuda_unavailable",
