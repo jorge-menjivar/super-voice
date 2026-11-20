@@ -54,7 +54,7 @@
     # entirely — by inventing a keycode for it, which lands above 255. X11
     # carries keycodes in one byte, so XWayland discards those and the
     # character never reaches an X11 app: `I think I am OK at NASA` arrived as
-    # ` think  am  at ` (jorge-menjivar/super-stt#432). The branch types
+    # ` think  am  at ` (super-libre/super-voice#432). The branch types
     # capitals as Shift plus the real key and binds off-layout characters to
     # keys the keymap already has. It also presses the Shift key itself around
     # a capital: cosmic-comp 1.10 loses the release of a Shift that is only

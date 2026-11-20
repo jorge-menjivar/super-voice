@@ -8,7 +8,7 @@
 
 *One shortcut to dictate anywhere • Natural voices, or clone your own • Any model from a growing library • An open protocol any app can build on • Built in Rust*
 
-[![coverage](https://img.shields.io/endpoint?url=https://jorge-menjivar.github.io/super-voice/coverage/coverage.json)](https://jorge-menjivar.github.io/super-voice/coverage/)
+[![coverage](https://img.shields.io/endpoint?url=https://super-libre.github.io/super-voice/coverage/coverage.json)](https://super-libre.github.io/super-voice/coverage/)
 
 </div>
 
@@ -19,7 +19,7 @@ https://github.com/user-attachments/assets/bbbe20c3-6802-4797-afc8-aa81d1b48415
 **Quick install** - detects your system and downloads pre-built binaries:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/jorge-menjivar/super-voice/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/super-libre/super-voice/main/install.sh | bash
 ```
 
 Append `-s -- --beta` for the latest beta.
@@ -123,7 +123,7 @@ Want a model that isn't there? Anyone can [publish one](./docs/protocol/README.m
 
 Super Voice is built to be built on. The details live in developer-facing docs:
 
-- **Build a client** — get transcriptions, event streams, or recording control into your own app, in any language, over the documented HTTP protocol → **[docs/protocol/](./docs/protocol/)**, with every endpoint in the **[API reference](https://jorge-menjivar.github.io/super-voice/protocol/)**
+- **Build a client** — get transcriptions, event streams, or recording control into your own app, in any language, over the documented HTTP protocol → **[docs/protocol/](./docs/protocol/)**, with every endpoint in the **[API reference](https://super-libre.github.io/super-voice/protocol/)**
 - **Add your own model** — package a speech model as a backend the daemon can install and run, then publish it to the catalog → **[docs/protocol/](./docs/protocol/)** and **[registry/README.md](./registry/README.md)**
 - **Contribute** — build from source, workspace layout, and the PR workflow → **[CONTRIBUTING.md](./CONTRIBUTING.md)**
 
