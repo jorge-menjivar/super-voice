@@ -45,6 +45,7 @@ impl SuperTTSDaemon {
             ),
             voices,
             secrets: shared.secrets,
+            recording: shared.recording,
         }
     }
 

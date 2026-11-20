@@ -2508,3 +2508,46 @@ async fn a_failed_synthesis_load_says_the_stage_is_empty() {
         ]
     );
 }
+
+/// Nothing is spoken while a recording captures, whichever way the speech is
+/// asked for: the microphone would hear it. Refused before anything else is
+/// tried, so the refusal is the recording, not the missing model.
+#[tokio::test]
+async fn nothing_is_spoken_while_a_recording_captures() {
+    let daemon = test_daemon().await;
+    let (claim, _cancelled) = daemon.recording.reserve().expect("free");
+
+    let response = daemon.handle_speak("Hello there.".to_string()).await;
+    assert_eq!(response.error_code, Some(ErrorCode::RecordingInProgress));
+    assert!(
+        matches!(
+            daemon.begin_speech().await,
+            Err(crate::tts::daemon::speech::SpeakError::RecordingInProgress)
+        ),
+        "the streaming path is refused too"
+    );
+
+    // Once capture ends, speech is no longer refused for it. The test daemon
+    // has no model, so this one is refused for that instead.
+    let _stopped = claim.start().expect("not cancelled");
+    claim.capture_ended();
+    let response = daemon.handle_speak("Hello there.".to_string()).await;
+    assert_eq!(response.error_code, Some(ErrorCode::ModelNotLoaded));
+}
+
+/// What a recording calls before it opens the microphone: the utterance
+/// speaking is silenced, and a request still waiting for its model never
+/// starts.
+#[tokio::test]
+async fn stopping_speech_silences_it_and_what_is_still_waiting() {
+    let daemon = test_daemon().await;
+    let waiting = daemon.speech.arrival();
+    let _speaking = daemon.speech.claim_for_test("utt_playing");
+
+    assert_eq!(daemon.stop_speaking().await.as_deref(), Some("utt_playing"));
+    assert!(daemon.speech.current().is_none(), "the slot is free");
+    assert!(
+        daemon.speech.is_overruled(waiting),
+        "a request asked for before the stop must not start"
+    );
+}

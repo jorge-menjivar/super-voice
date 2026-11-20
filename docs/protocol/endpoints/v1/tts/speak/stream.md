@@ -105,4 +105,4 @@ not be able to open them without limit.
 | `401 invalid_session`       | Token unknown / expired / `exe_changed` — re-auth and retry.  |
 | `403 scope_denied`          | Token lacks the `speak` scope.                                |
 | `503 speak_sessions_busy`   | Four sessions are already open.                               |
-| `{"type":"error", …}`       | Anything that goes wrong after the upgrade: a `start` still naming a removed field, no model loaded, a model that speaks only in a voice the user chooses with none chosen (`voice_required: …`), a configured voice the model does not declare, the backend failed, the audio device could not be opened. |
+| `{"type":"error", …}`       | Anything that goes wrong after the upgrade: a `start` still naming a removed field, no model loaded, a model that speaks only in a voice the user chooses with none chosen (`voice_required: …`), a recording capturing (`recording_in_progress: …`), a configured voice the model does not declare, the backend failed, the audio device could not be opened. |

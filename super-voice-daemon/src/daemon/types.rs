@@ -176,6 +176,7 @@ pub(crate) async fn put_model(slot: &SharedLoadedModel, model: LoadedModel) {
 #[cfg(test)]
 pub(crate) async fn test_daemon() -> SuperSTTDaemon {
     let (shutdown_tx, _) = broadcast::channel(1);
+    let tts = crate::tts::daemon::types::test_daemon().await;
     SuperSTTDaemon {
         model: Arc::default(),
         post_processor: Arc::default(),
@@ -185,7 +186,7 @@ pub(crate) async fn test_daemon() -> SuperSTTDaemon {
         events: Arc::new(EventBus::new()),
         audio_theme: Arc::new(RwLock::new(AudioTheme::default())),
         volume: Arc::new(RwLock::new(100)),
-        recording: Arc::default(),
+        recording: Arc::clone(&tts.recording),
         download_manager: Arc::new(DownloadStateManager::new()),
         config: Arc::new(tokio::sync::RwLock::new(DaemonConfig::default())),
         resource_manager: Arc::new(ResourceManager::development()),
@@ -210,7 +211,7 @@ pub(crate) async fn test_daemon() -> SuperSTTDaemon {
         shortcuts: Arc::new(crate::shortcuts::Shortcuts::default()),
         // In memory: no daemon test reads or writes the user's secrets file.
         secrets: Secrets::in_memory(),
-        tts: crate::tts::daemon::types::test_daemon().await,
+        tts,
     }
 }
 

@@ -193,6 +193,11 @@ pub enum SpeakError {
     /// usually. Newest wins by arrival, not by who got through the wait first.
     #[error("superseded: a newer request to speak, or a stop, came while this one waited")]
     Superseded,
+    /// A recording is capturing, and the microphone would hear the speech.
+    #[error(
+        "recording_in_progress: a recording is capturing, and the microphone would hear the speech"
+    )]
+    RecordingInProgress,
 }
 
 /// What the sink hands the pump.
@@ -530,6 +535,13 @@ impl SpeechEngine {
     pub(crate) fn claim_for_test(&self, id: &str) -> ClaimGuard<'_> {
         *self.current.lock() = Some((id.to_string(), Arc::new(AtomicBool::new(false))));
         ClaimGuard { engine: self }
+    }
+
+    /// Whether a request holding `ticket` would now be refused the slot:
+    /// something newer has started, or a stop came after it.
+    #[cfg(test)]
+    pub(crate) fn is_overruled(&self, ticket: u64) -> bool {
+        self.newest_started.load(Ordering::SeqCst) > ticket
     }
 
     /// The playback handle, for tests that inspect what was rendered.
@@ -1723,6 +1735,11 @@ pub(crate) fn speech_refusal(
         SpeakError::NotLoaded => {
             DaemonResponse::error_with_code(ErrorCode::ModelNotLoaded, "model_not_loaded")
         }
+        SpeakError::RecordingInProgress => DaemonResponse::error_with_code(
+            ErrorCode::RecordingInProgress,
+            "a recording is capturing, and the microphone would hear the speech; \
+             try again when it stops",
+        ),
         SpeakError::VoiceRequired(model) => DaemonResponse::error_with_code(
             ErrorCode::VoiceRequired,
             &format!(
@@ -1759,6 +1776,11 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         // would otherwise load the model only to be refused after.
         if let Err(e) = check_text(&text) {
             return DaemonResponse::error_with_code(ErrorCode::InvalidValue, &e.to_string());
+        }
+        // Nothing is spoken while a recording captures: the microphone would
+        // hear it. Before the load, which it would only waste.
+        if self.recording.is_capturing() {
+            return self.refuse_speech(SpeakError::RecordingInProgress).await;
         }
         // So is a model that cannot speak until the user picks its voice. The
         // backend refuses it too, but only once the model is loaded, which is
@@ -1858,6 +1880,7 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
                 Some(Failure::synthesis_failed(Origin::Backend, detail))
             }
             SpeakError::VoiceRequired(model) => Some(Failure::no_voice_chosen(model)),
+            SpeakError::RecordingInProgress => Some(Failure::recording_in_progress()),
         } {
             let method = crate::tts::output::notification::method_for_speech(
                 self.config.read().await.notification_method,
@@ -1887,7 +1910,10 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
     /// See [`SpeakError`].
     pub(crate) async fn begin_speech(&self) -> Result<SpeakSession, SpeakError> {
         let ticket = self.speech.arrival();
-        // Before the load, for the reason `handle_speak` gives.
+        // Before the load, for the reasons `handle_speak` gives.
+        if self.recording.is_capturing() {
+            return Err(SpeakError::RecordingInProgress);
+        }
         if let Some(model) = self.voice_still_to_choose().await {
             return Err(SpeakError::VoiceRequired(model));
         }
@@ -1980,12 +2006,18 @@ impl crate::tts::daemon::types::SuperTTSDaemon {
         &self,
     ) -> super_voice_shared::tts::models::protocol::DaemonResponse {
         use super_voice_shared::tts::models::protocol::DaemonResponse;
-        // What is still waiting to start was asked for before the stop.
-        self.speech.overrule_waiting();
-        match self.speech.cancel().await {
+        match self.stop_speaking().await {
             Some(id) => DaemonResponse::success().with_utterance_id(id),
             None => DaemonResponse::success(),
         }
+    }
+
+    /// Stop the utterance speaking, and every request still waiting to start.
+    /// The id of the utterance it silenced, if one was speaking.
+    pub async fn stop_speaking(&self) -> Option<String> {
+        // What is still waiting to start was asked for before the stop.
+        self.speech.overrule_waiting();
+        self.speech.cancel().await
     }
 }
 

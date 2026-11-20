@@ -44,6 +44,9 @@ pub enum ErrorCode {
     /// The request succeeds once one is set with
     /// `POST /tts/pipeline/{stage}/model/{model}/voice`.
     VoiceRequired,
+    /// A recording is capturing, so nothing is spoken: the microphone would
+    /// hear it. The request succeeds once the capture ends.
+    RecordingInProgress,
 
     // --- 400 Bad Request: the client gave the daemon something it couldn't
     // use. ---
@@ -94,7 +97,8 @@ impl ErrorCode {
             | Self::ModelNotLoaded
             | Self::BuildNotInstalled
             | Self::NothingToRead
-            | Self::VoiceRequired => 409,
+            | Self::VoiceRequired
+            | Self::RecordingInProgress => 409,
             Self::InvalidModel
             | Self::InvalidBackend
             | Self::CudaUnavailable
@@ -144,6 +148,17 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&ErrorCode::VoiceRequired).unwrap(),
             r#""voice_required""#
+        );
+    }
+
+    /// Refused while a recording captures: the request becomes valid once the
+    /// capture ends, so it is a state conflict too.
+    #[test]
+    fn recording_in_progress_is_a_state_conflict() {
+        assert_eq!(ErrorCode::RecordingInProgress.http_status(), 409);
+        assert_eq!(
+            serde_json::to_string(&ErrorCode::RecordingInProgress).unwrap(),
+            r#""recording_in_progress""#
         );
     }
 
